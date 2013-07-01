@@ -16,7 +16,7 @@ namespace System.Net.Http
     {
         private const int DefaultBufferSize = 32 * 1024;
 
-        public static async Task<HttpRequestMessage> ReadAsBatchHttpRequestMessageAsyncCore(this HttpContent content)
+        public static async Task<HttpRequestMessage> ReadAsBatchHttpRequestMessageAsync(this HttpContent content)
         {
             Stream stream = await content.ReadAsStreamAsync();
             HttpUnsortedRequest httpRequest = new HttpUnsortedRequest();
