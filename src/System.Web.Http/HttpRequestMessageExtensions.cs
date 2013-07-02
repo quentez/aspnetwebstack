@@ -14,6 +14,7 @@ using System.Web.Http.Dependencies;
 using System.Web.Http.Hosting;
 using System.Web.Http.ModelBinding;
 using System.Web.Http.Properties;
+using System.Web.Http.Results;
 using System.Web.Http.Routing;
 
 namespace System.Net.Http
@@ -202,7 +203,6 @@ namespace System.Net.Http
         /// <param name="invalidByteRangeException">An <see cref="InvalidByteRangeException"/> instance, typically thrown by a
         /// <see cref="ByteRangeStreamContent"/> instance.</param>
         /// <returns>An 416 (Requested Range Not Satisfiable) error response with a Content-Range header indicating the valid range.</returns>
-        [SuppressMessage("Microsoft.Naming", "CA1704:IdentifiersShouldBeSpelledCorrectly", MessageId = "Satisfiable", Justification = "Word is correctly spelled.")]
         [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Caller will dispose")]
         public static HttpResponseMessage CreateErrorResponse(this HttpRequestMessage request, InvalidByteRangeException invalidByteRangeException)
         {
@@ -354,6 +354,7 @@ namespace System.Net.Http
             HttpConfiguration configuration = request.GetConfiguration();
 
             HttpError error = errorCreator(request.ShouldIncludeErrorDetail());
+
             // CreateErrorResponse should never fail, even if there is no configuration associated with the request
             // In that case, use the default HttpConfiguration to con-neg the response media type
             if (configuration == null)
@@ -372,8 +373,8 @@ namespace System.Net.Http
         /// <summary>
         /// Helper method that performs content negotiation and creates a <see cref="HttpResponseMessage"/> with an instance
         /// of <see cref="ObjectContent{T}"/> as the content and <see cref="System.Net.HttpStatusCode.OK"/> as the status code
-        /// if a formatter can be found. If no formatter is found, this method returns a response with status 406 NotAcceptable. 
-        /// This forwards the call to <see cref="CreateResponse{T}(HttpRequestMessage, HttpStatusCode, T, HttpConfiguration)"/> with 
+        /// if a formatter can be found. If no formatter is found, this method returns a response with status 406 NotAcceptable.
+        /// This forwards the call to <see cref="CreateResponse{T}(HttpRequestMessage, HttpStatusCode, T, HttpConfiguration)"/> with
         /// <see cref="System.Net.HttpStatusCode.OK"/> status code and a <c>null</c> configuration.
         /// </summary>
         /// <remarks>
@@ -425,7 +426,6 @@ namespace System.Net.Http
         /// <param name="value">The value to wrap. Can be <c>null</c>.</param>
         /// <param name="configuration">The configuration to use. Can be <c>null</c>.</param>
         /// <returns>A response wrapping <paramref name="value"/> with <paramref name="statusCode"/>.</returns>
-        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Caller will dispose")]
         public static HttpResponseMessage CreateResponse<T>(this HttpRequestMessage request, HttpStatusCode statusCode, T value, HttpConfiguration configuration)
         {
             if (request == null)
@@ -447,29 +447,7 @@ namespace System.Net.Http
 
             IEnumerable<MediaTypeFormatter> formatters = configuration.Formatters;
 
-            // Run content negotiation
-            ContentNegotiationResult result = contentNegotiator.Negotiate(typeof(T), request, formatters);
-
-            if (result == null)
-            {
-                // no result from content negotiation indicates that 406 should be sent.
-                return new HttpResponseMessage
-                {
-                    StatusCode = HttpStatusCode.NotAcceptable,
-                    RequestMessage = request,
-                };
-            }
-            else
-            {
-                MediaTypeHeaderValue mediaType = result.MediaType;
-                return new HttpResponseMessage
-                {
-                    // At this point mediaType should be a cloned value (the content negotiator is responsible for returning a new copy)
-                    Content = new ObjectContent<T>(value, result.Formatter, mediaType),
-                    StatusCode = statusCode,
-                    RequestMessage = request
-                };
-            }
+            return NegotiatedContentResult<T>.Execute(statusCode, value, contentNegotiator, request, formatters);
         }
 
         /// <summary>
@@ -570,7 +548,6 @@ namespace System.Net.Http
         /// <param name="formatter">The formatter to use.</param>
         /// <param name="mediaType">The media type override to set on the response's content. Can be <c>null</c>.</param>
         /// <returns>A response wrapping <paramref name="value"/> with <paramref name="statusCode"/>.</returns>
-        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Caller will dispose")]
         public static HttpResponseMessage CreateResponse<T>(this HttpRequestMessage request, HttpStatusCode statusCode, T value, MediaTypeFormatter formatter, MediaTypeHeaderValue mediaType)
         {
             if (request == null)
@@ -582,9 +559,7 @@ namespace System.Net.Http
                 throw Error.ArgumentNull("formatter");
             }
 
-            HttpResponseMessage response = request.CreateResponse(statusCode);
-            response.Content = new ObjectContent<T>(value, formatter, mediaType);
-            return response;
+            return FormattedContentResult<T>.Execute(statusCode, value, formatter, mediaType, request);
         }
 
         /// <summary>
@@ -605,14 +580,38 @@ namespace System.Net.Http
                 return;
             }
 
-            List<IDisposable> trackedResources;
-            if (!request.Properties.TryGetValue(HttpPropertyKeys.DisposableRequestResourcesKey, out trackedResources))
-            {
-                trackedResources = new List<IDisposable>();
-                request.Properties[HttpPropertyKeys.DisposableRequestResourcesKey] = trackedResources;
-            }
+            List<IDisposable> trackedResources = GetRegisteredResourcesForDispose(request);
 
             trackedResources.Add(resource);
+        }
+
+        /// <summary>
+        /// Adds the given <paramref name="resources"/> to a list of resources that will be disposed by a host once
+        /// the <paramref name="request"/> is disposed.
+        /// </summary>
+        /// <param name="request">The request controlling the lifecycle of <paramref name="resources"/>.</param>
+        /// <param name="resources">The resources to dispose when <paramref name="request"/> is being disposed. Can be <c>null</c>.</param>
+        public static void RegisterForDispose(this HttpRequestMessage request, IEnumerable<IDisposable> resources)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            if (resources == null)
+            {
+                throw Error.ArgumentNull("resources");
+            }
+
+            List<IDisposable> trackedResources = GetRegisteredResourcesForDispose(request);
+
+            foreach (IDisposable resource in resources)
+            {
+                if (resource != null)
+                {
+                    trackedResources.Add(resource);
+                }
+            }
         }
 
         /// <summary>
@@ -779,7 +778,7 @@ namespace System.Net.Http
 
             request.Properties[HttpPropertyKeys.VirtualPathRoot] = virtualPathRoot;
         }
-        
+
         /// <summary>
         /// Gets a value indicating whether the request originates from a local address or not.
         /// </summary>
@@ -795,6 +794,21 @@ namespace System.Net.Http
             Lazy<bool> isLocal = request.GetProperty<Lazy<bool>>(HttpPropertyKeys.IsLocalKey);
 
             return isLocal == null ? false : isLocal.Value;
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the request originates from a batch.
+        /// </summary>
+        /// <param name="request">The HTTP request.</param>
+        /// <returns><see langword="true"/> if the request originates from a batch; otherwise, <see langword="false"/>.</returns>
+        public static bool IsBatchRequest(this HttpRequestMessage request)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            return request.GetProperty<bool>(HttpPropertyKeys.IsBatchRequest);
         }
 
         /// <summary>
@@ -838,6 +852,69 @@ namespace System.Net.Http
                 default:
                     return false;
             }
+        }
+
+        /// <summary>
+        /// Gets the collection of resources registered for dispose once the <paramref name="request"/> is disposed.
+        /// </summary>
+        /// <param name="request">The request.</param>
+        /// <returns>A collection of resources registered for dispose.</returns>
+        public static IEnumerable<IDisposable> GetResourcesForDisposal(this HttpRequestMessage request)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            return GetRegisteredResourcesForDispose(request);
+        }
+
+        /// <summary>
+        /// Gets the response message of the <see cref="HttpResponseException"/> thrown by a custom route implementation.
+        /// </summary>
+        /// <remarks>Custom <see cref="IHttpRoute"/> implementations can throw <see cref="HttpResponseException"/> to indicate that the incoming request matches
+        /// the route but is a bad request (HTTP 400 status code).</remarks>
+        /// <param name="request">The incoming request message.</param>
+        public static HttpResponseMessage GetRoutingErrorResponse(this HttpRequestMessage request)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            return request.GetProperty<HttpResponseMessage>(HttpPropertyKeys.RoutingErrorResponseKey);
+        }
+
+        /// <summary>
+        /// Sets the response message of the <see cref="HttpResponseException"/> thrown by a custom route implementation.
+        /// </summary>
+        /// <remarks>Custom <see cref="IHttpRoute"/> implementations can throw <see cref="HttpResponseException"/> to indicate that the incoming request matches
+        /// the route but is a bad request (HTTP 400 status code).</remarks>
+        /// <param name="request">The incoming request message.</param>
+        /// <param name="errorResponse">The error response to be returned.</param>
+        public static void SetRoutingErrorResponse(this HttpRequestMessage request, HttpResponseMessage errorResponse)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+            if (errorResponse == null)
+            {
+                throw Error.ArgumentNull("errorResponse");
+            }
+
+            request.Properties[HttpPropertyKeys.RoutingErrorResponseKey] = errorResponse;
+        }
+
+        private static List<IDisposable> GetRegisteredResourcesForDispose(HttpRequestMessage request)
+        {
+            List<IDisposable> registeredResourcesForDispose;
+            if (!request.Properties.TryGetValue(HttpPropertyKeys.DisposableRequestResourcesKey, out registeredResourcesForDispose))
+            {
+                registeredResourcesForDispose = new List<IDisposable>();
+                request.Properties[HttpPropertyKeys.DisposableRequestResourcesKey] = registeredResourcesForDispose;
+            }
+            return registeredResourcesForDispose;
         }
     }
 }

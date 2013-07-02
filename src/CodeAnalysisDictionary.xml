@@ -49,6 +49,8 @@
             <Word>bg</Word>
             <Word>Cors</Word>
             <Word>Owin</Word>
+            <Word>Unbuffered</Word>
+            <Word>Rfc</Word>
         </Recognized>
         <Compound>
             <Term CompoundAlternate="WebPage">WebPage</Term>

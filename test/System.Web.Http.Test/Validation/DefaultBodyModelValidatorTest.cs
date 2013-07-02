@@ -6,7 +6,9 @@ using System.Web.Http.Controllers;
 using System.Web.Http.Metadata;
 using System.Web.Http.Metadata.Providers;
 using System.Web.Http.ModelBinding;
+using System.Xml.Linq;
 using Microsoft.TestCommon;
+using Moq;
 
 namespace System.Web.Http.Validation
 {
@@ -79,6 +81,24 @@ namespace System.Web.Http.Validation
                             { "[1].Value.Profession", "The Profession field is required." }
                         }
                     },
+
+                    // IValidatableObject's
+                    { new ValidatableModel(), typeof(ValidatableModel), new Dictionary<string, string>()
+                        {
+                            { "", "Error1" },
+                            { "Property1", "Error2" },
+                            { "Property2", "Error3" },
+                            { "Property3", "Error3" }
+                        }
+                    },
+                    { new[] { new ValidatableModel() }, typeof(ValidatableModel[]), new Dictionary<string, string>()
+                        {
+                            { "[0]", "Error1" },
+                            { "[0].Property1", "Error2" },
+                            { "[0].Property2", "Error3" },
+                            { "[0].Property3", "Error3" }
+                        }
+                    },
                     
                     // Testing we don't blow up on cycles
                     { LonelyPerson, typeof(Person), new Dictionary<string, string>()
@@ -87,6 +107,14 @@ namespace System.Web.Http.Validation
                             { "Profession", "The Profession field is required." }
                         }
                     },
+
+                    // Testing that we don't bubble up exceptions when property getters throw
+                    { new Uri("/api/values", UriKind.Relative), typeof(Uri), new Dictionary<string, string>() },
+                    
+                    // Testing that excluded types don't result in any errors
+                    { typeof(string), typeof(Type), new Dictionary<string, string>() },
+                    { new byte[] { (byte)'a', (byte)'b' }, typeof(byte[]), new Dictionary<string, string>() },
+                    { XElement.Parse("<xml>abc</xml>"), typeof(XElement), new Dictionary<string, string>() }
                 };
             }
         }
@@ -159,37 +187,89 @@ namespace System.Web.Http.Validation
             ModelState streetState = actionContext.ModelState["Street"];
             Assert.Equal(1, streetState.Errors.Count);
         }
-    }
 
-    public class Person
-    {
-        [Required]
-        [StringLength(10)]
-        public string Name { get; set; }
+        [Fact]
+        public void ExcludedTypes_AreNotValidated()
+        {
+            // Arrange
+            ModelMetadataProvider metadataProvider = new DataAnnotationsModelMetadataProvider();
+            HttpActionContext actionContext = ContextUtil.CreateActionContext();
+            Mock<DefaultBodyModelValidator> mockValidator = new Mock<DefaultBodyModelValidator>();
+            mockValidator.CallBase = true;
+            mockValidator.Setup(validator => validator.ShouldValidateType(typeof(Person))).Returns(false);
 
-        [Required]
-        public string Profession { get; set; }
+            // Act
+            mockValidator.Object.Validate(new Person(), typeof(Person), metadataProvider, actionContext, string.Empty);
 
-        public Person Friend { get; set; }
-    }
+            // Assert
+            Assert.True(actionContext.ModelState.IsValid);
+        }
 
-    public class Address
-    {
-        [StringLength(5)]
-        [RegularExpression("hehehe")]
-        public string Street { get; set; }
-    }
+        [Fact]
+        public void ExcludedPropertyTypes_AreShallowValidated()
+        {
+            // Arrange
+            ModelMetadataProvider metadataProvider = new DataAnnotationsModelMetadataProvider();
+            HttpActionContext actionContext = ContextUtil.CreateActionContext();
+            Mock<DefaultBodyModelValidator> mockValidator = new Mock<DefaultBodyModelValidator>();
+            mockValidator.CallBase = true;
+            mockValidator.Setup(validator => validator.ShouldValidateType(typeof(Person))).Returns(false);
 
-    public struct ValueType
-    {
-        public int Value;
-        public string Reference;
-    }
+            // Act
+            mockValidator.Object.Validate(new Pet(), typeof(Pet), metadataProvider, actionContext, string.Empty);
 
-    public class ReferenceType
-    {
-        public static string StaticProperty { get { return "static"; } }
-        public int Value;
-        public string Reference;
-    }
+            // Assert
+            Assert.False(actionContext.ModelState.IsValid);
+            ModelState modelState = actionContext.ModelState["Owner"];
+            Assert.Equal(1, modelState.Errors.Count);
+        }
+
+        public class Person
+        {
+            [Required]
+            [StringLength(10)]
+            public string Name { get; set; }
+
+            [Required]
+            public string Profession { get; set; }
+
+            public Person Friend { get; set; }
+        }
+
+        public class Address
+        {
+            [StringLength(5)]
+            [RegularExpression("hehehe")]
+            public string Street { get; set; }
+        }
+
+        public struct ValueType
+        {
+            public int Value;
+            public string Reference;
+        }
+
+        public class ReferenceType
+        {
+            public static string StaticProperty { get { return "static"; } }
+            public int Value;
+            public string Reference;
+        }
+
+        public class Pet
+        {
+            [Required]
+            public Person Owner { get; set; }
+        }
+
+        public class ValidatableModel : IValidatableObject
+        {
+            public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+            {
+                yield return new ValidationResult("Error1", new string[] { });
+                yield return new ValidationResult("Error2", new[] { "Property1" });
+                yield return new ValidationResult("Error3", new[] { "Property2", "Property3" });
+            }
+        }
+    } 
 }

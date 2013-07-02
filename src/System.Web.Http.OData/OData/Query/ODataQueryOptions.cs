@@ -108,6 +108,11 @@ namespace System.Web.Http.OData.Query
                 }
             }
 
+            if (RawValues.Select != null || RawValues.Expand != null)
+            {
+                SelectExpand = new SelectExpandQueryOption(RawValues.Select, RawValues.Expand, context);
+            }
+
             Validator = new ODataQueryValidator();
         }
 
@@ -125,6 +130,11 @@ namespace System.Web.Http.OData.Query
         /// Gets the raw string of all the OData query options
         /// </summary>
         public ODataRawQueryOptions RawValues { get; private set; }
+
+        /// <summary>
+        /// Gets the <see cref="SelectExpandQueryOption"/>.
+        /// </summary>
+        public SelectExpandQueryOption SelectExpand { get; private set; }
 
         /// <summary>
         /// Gets the <see cref="FilterQueryOption"/>.
@@ -210,7 +220,7 @@ namespace System.Web.Http.OData.Query
                 result = Filter.ApplyTo(result, querySettings, _assembliesResolver);
             }
 
-            if (InlineCount != null)
+            if (InlineCount != null && Request.GetInlineCount() == null)
             {
                 long? count = InlineCount.GetEntityCount(result);
                 if (count.HasValue)
@@ -253,11 +263,17 @@ namespace System.Web.Http.OData.Query
                 result = Top.ApplyTo(result, querySettings);
             }
 
+            if (SelectExpand != null)
+            {
+                Request.SetSelectExpandClause(SelectExpand.SelectExpandClause);
+                result = SelectExpand.ApplyTo(result, querySettings);
+            }
+
             if (querySettings.PageSize.HasValue)
             {
                 bool resultsLimited;
-                result = LimitResults(result, querySettings.PageSize.Value, Context, out resultsLimited);
-                if (resultsLimited && Request.RequestUri != null && Request.RequestUri.IsAbsoluteUri)
+                result = LimitResults(result, querySettings.PageSize.Value, out resultsLimited);
+                if (resultsLimited && Request.RequestUri != null && Request.RequestUri.IsAbsoluteUri && Request.GetNextPageLink() == null)
                 {
                     Uri nextPageLink = GetNextPageLink(Request, querySettings.PageSize.Value);
                     Request.SetNextPageLink(nextPageLink);
@@ -265,6 +281,39 @@ namespace System.Web.Http.OData.Query
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Applies the query to the given entity using the given <see cref="ODataQuerySettings"/>.
+        /// </summary>
+        /// <param name="entity">The original entity.</param>
+        /// <param name="querySettings">The <see cref="ODataQuerySettings"/> that contains all the query application related settings.</param>
+        /// <returns>The new entity after the $select and $expand query has been applied to.</returns>
+        /// <remarks>Only $select and $expand query options can be applied on single entities. This method throws if the query contains any other
+        /// query options.</remarks>
+        public virtual object ApplyTo(object entity, ODataQuerySettings querySettings)
+        {
+            if (entity == null)
+            {
+                throw Error.ArgumentNull("entity");
+            }
+            if (querySettings == null)
+            {
+                throw Error.ArgumentNull("querySettings");
+            }
+
+            if (Filter != null || OrderBy != null || Top != null || Skip != null || InlineCount != null)
+            {
+                throw Error.InvalidOperation(SRResources.NonSelectExpandOnSingleEntity);
+            }
+
+            if (SelectExpand != null)
+            {
+                Request.SetSelectExpandClause(SelectExpand.SelectExpandClause);
+                return SelectExpand.ApplyTo(entity, querySettings);
+            }
+
+            return entity;
         }
 
         /// <summary>
@@ -370,9 +419,9 @@ namespace System.Web.Http.OData.Query
             return orderBy;
         }
 
-        internal static IQueryable LimitResults(IQueryable queryable, int limit, ODataQueryContext context, out bool resultsLimited)
+        internal static IQueryable LimitResults(IQueryable queryable, int limit, out bool resultsLimited)
         {
-            MethodInfo genericMethod = _limitResultsGenericMethod.MakeGenericMethod(context.ElementClrType);
+            MethodInfo genericMethod = _limitResultsGenericMethod.MakeGenericMethod(queryable.ElementType);
             object[] args = new object[] { queryable, limit, null };
             IQueryable results = genericMethod.Invoke(null, args) as IQueryable;
             resultsLimited = (bool)args[2];

@@ -13,6 +13,18 @@ namespace System.Web.Http
 {
     internal static class TypeHelper
     {
+        public static Type ToNullable(this Type t)
+        {
+            if (t.IsNullable())
+            {
+                return t;
+            }
+            else
+            {
+                return typeof(Nullable<>).MakeGenericType(t);
+            }
+        }
+
         // Gets the collection element type.
         public static Type GetInnerElementType(this Type type)
         {

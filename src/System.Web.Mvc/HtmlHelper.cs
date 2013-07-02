@@ -10,6 +10,7 @@ using System.Text;
 using System.Web.Helpers;
 using System.Web.Mvc.Properties;
 using System.Web.Routing;
+using System.Web.WebPages.Scope;
 
 namespace System.Web.Mvc
 {
@@ -21,6 +22,8 @@ namespace System.Web.Mvc
         public static readonly string ValidationMessageValidCssClassName = "field-validation-valid";
         public static readonly string ValidationSummaryCssClassName = "validation-summary-errors";
         public static readonly string ValidationSummaryValidCssClassName = "validation-summary-valid";
+
+        private static readonly object _html5InputsModeKey = new object();
 
         private DynamicViewDataDictionary _dynamicViewDataDictionary;
 
@@ -93,25 +96,51 @@ namespace System.Web.Mvc
 
         public IViewDataContainer ViewDataContainer { get; internal set; }
 
+        /// <summary>
+        /// Creates a dictionary of HTML attributes from the input object, 
+        /// translating underscores to dashes.
+        /// <example>
+        /// new { data_name="value" } will translate to the entry { "data-name" , "value" }
+        /// in the resulting dictionary.
+        /// </example>
+        /// </summary>
+        /// <param name="htmlAttributes">Anonymous object describing HTML attributes.</param>
+        /// <returns>A dictionary that represents HTML attributes.</returns>
         public static RouteValueDictionary AnonymousObjectToHtmlAttributes(object htmlAttributes)
         {
-            RouteValueDictionary result = new RouteValueDictionary();
-
-            if (htmlAttributes != null)
-            {
-                foreach (PropertyDescriptor property in TypeDescriptor.GetProperties(htmlAttributes))
-                {
-                    result.Add(property.Name.Replace('_', '-'), property.GetValue(htmlAttributes));
-                }
-            }
-
-            return result;
+            return System.Web.WebPages.Html.HtmlHelper.AnonymousObjectToHtmlAttributes(htmlAttributes);
         }
 
         [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic", Justification = "For consistency, all helpers are instance methods.")]
         public MvcHtmlString AntiForgeryToken()
         {
             return new MvcHtmlString(AntiForgery.GetHtml().ToString());
+        }
+
+        /// <summary>
+        /// Set this property to <see cref="Mvc.Html5DateRenderingMode.Rfc3339"/> to have templated helpers such as Html.EditorFor render date and time
+        /// values as Rfc3339 compliant strings.
+        /// </summary>
+        /// <remarks>
+        /// The scope of this setting is for the current view alone. Sub views and parent views
+        /// will default to <see cref="Mvc.Html5DateRenderingMode.CurrentCulture"/> unless explicitly set otherwise.
+        /// </remarks>
+        [SuppressMessage("Microsoft.Performance", "CA1822:MarkMembersAsStatic", Justification = "The usage of the property is as an instance property of the helper.")]
+        public Html5DateRenderingMode Html5DateRenderingMode
+        {
+            get
+            {
+                object value;
+                if (ScopeStorage.CurrentScope.TryGetValue(_html5InputsModeKey, out value))
+                {
+                    return (Html5DateRenderingMode)value;
+                }
+                return default(Html5DateRenderingMode);
+            }
+            set
+            {
+                ScopeStorage.CurrentScope[_html5InputsModeKey] = value;
+            }
         }
 
         [SuppressMessage("Microsoft.Naming", "CA2204:Literals should be spelled correctly", MessageId = "AdditionalDataProvider", Justification = "API name.")]

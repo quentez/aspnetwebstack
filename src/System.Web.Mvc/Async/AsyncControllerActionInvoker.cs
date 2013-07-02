@@ -41,7 +41,6 @@ namespace System.Web.Mvc.Async
                     {
                         AuthenticationContext authenticationContext = InvokeAuthenticationFilters(controllerContext,
                             filterInfo.AuthenticationFilters, actionDescriptor);
-
                         if (authenticationContext.Result != null)
                         {
                             // An authentication filter signaled that we should short-circuit the request. Let all
@@ -55,14 +54,6 @@ namespace System.Web.Mvc.Async
                         }
                         else
                         {
-                            IPrincipal principal = authenticationContext.Principal;
-
-                            if (principal != null)
-                            {
-                                Thread.CurrentPrincipal = principal;
-                                HttpContext.Current.User = principal;
-                            }
-
                             AuthorizationContext authorizationContext = InvokeAuthorizationFilters(controllerContext, filterInfo.AuthorizationFilters, actionDescriptor);
                             if (authorizationContext.Result != null)
                             {
@@ -72,8 +63,8 @@ namespace System.Web.Mvc.Async
                                 AuthenticationChallengeContext challengeContext =
                                     InvokeAuthenticationFiltersChallenge(controllerContext,
                                     filterInfo.AuthenticationFilters, actionDescriptor, authorizationContext.Result);
-                                continuation = () => InvokeActionResult(controllerContext, challengeContext.Result ??
-                                    authorizationContext.Result);
+                                continuation = () => InvokeActionResult(controllerContext,
+                                    challengeContext.Result ?? authorizationContext.Result);
                             }
                             else
                             {

@@ -11,7 +11,7 @@
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
-    <DefineConstants>$(DefineConstants);ASPNETMVC</DefineConstants>
+    <DefineConstants>$(DefineConstants);ASPNETMVC;ASPNETWEBAPI</DefineConstants>
     <NoWarn>1591</NoWarn>
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
@@ -63,57 +63,123 @@
     <Compile Include="..\Common\TaskHelpersExtensions.cs">
       <Link>Common\TaskHelpersExtensions.cs</Link>
     </Compile>
+    <Compile Include="..\Common\TypeExtensions.cs">
+      <Link>Common\TypeExtensions.cs</Link>
+    </Compile>
     <Compile Include="..\Common\UriQueryUtility.cs">
       <Link>Common\UriQueryUtility.cs</Link>
     </Compile>
     <Compile Include="AcceptVerbsAttribute.cs" />
+    <Compile Include="Batch\BatchExecutionOrder.cs" />
+    <Compile Include="Batch\HttpBatchHandler.cs" />
+    <Compile Include="Batch\DefaultHttpBatchHandler.cs" />
+    <Compile Include="Batch\BatchHttpRequestMessageExtensions.cs" />
+    <Compile Include="Controllers\ActionFilterResult.cs" />
+    <Compile Include="Controllers\AuthenticationFilterResult.cs" />
+    <Compile Include="Controllers\AuthorizationFilterResult.cs" />
     <Compile Include="Controllers\HttpControllerSettings.cs" />
     <Compile Include="Controllers\HttpParameterDescriptorExtensions.cs" />
     <Compile Include="Controllers\IActionResultConverter.cs" />
     <Compile Include="Controllers\HttpActionContext.cs" />
     <Compile Include="Controllers\IControllerConfiguration.cs" />
-    <Compile Include="Controllers\IHostPrincipalService.cs" />
-    <Compile Include="Controllers\IHttpActionResult.cs" />
-    <Compile Include="ContinuationResult.cs" />
+    <Compile Include="Description\ResponseTypeAttribute.cs" />
+    <Compile Include="Description\ResponseDescription.cs" />
+    <Compile Include="Filters\HttpAuthenticationChallengeContext.cs" />
+    <Compile Include="Hosting\IHostPrincipalService.cs" />
+    <Compile Include="Results\InvalidModelStateResult.cs" />
+    <Compile Include="Results\FormattedContentResult.cs" />
+    <Compile Include="Hosting\SuppressHostPrincipalMessageHandler.cs" />
+    <Compile Include="Results\NegotiatedContentResult.cs" />
+    <Compile Include="Results\StatusCodeResult.cs" />
+    <Compile Include="IHttpActionResult.cs" />
+    <Compile Include="Results\ContinuationResult.cs" />
+    <Compile Include="HttpErrorKeys.cs" />
     <Compile Include="HttpVerbAttribute.cs" />
+    <Compile Include="Controllers\FilterGrouping.cs" />
     <Compile Include="RoutePrefixAttribute.cs" />
     <Compile Include="Filters\HttpAuthenticationContext.cs" />
-    <Compile Include="MessageResult.cs" />
-    <Compile Include="Controllers\ThreadPrincipalService.cs" />
+    <Compile Include="Results\ResponseMessageResult.cs" />
+    <Compile Include="Hosting\ThreadPrincipalService.cs" />
     <Compile Include="Filters\IAuthenticationFilter.cs" />
-    <Compile Include="Filters\IAuthenticationResult.cs" />
     <Compile Include="Filters\IOverrideFilter.cs" />
-    <Compile Include="Filters\OverrideActionFiltersAttribute.cs" />
-    <Compile Include="Filters\OverrideAuthenticationAttribute.cs" />
-    <Compile Include="Filters\OverrideAuthorizationAttribute.cs" />
-    <Compile Include="Filters\OverrideExceptionFiltersAttribute.cs" />
-    <Compile Include="Routing\Constraints\AlphaHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\BoolHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\CompoundHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\DateTimeHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\DecimalHttpRouteConstraint.cs" />
-    <Compile Include="Routing\DefaultInlineConstraintResolver.cs" />
-    <Compile Include="Routing\Constraints\DoubleHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\FloatHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\GuidHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\IntHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\LengthHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\LongHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\MaxLengthHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\MaxHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\MinLengthHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\MinHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\RangeRouteConstraintBase.cs" />
-    <Compile Include="Routing\Constraints\RegexHttpRouteConstraint.cs" />
-    <Compile Include="Routing\Constraints\OptionalHttpRouteConstraint.cs" />
+    <Compile Include="OverrideActionFiltersAttribute.cs" />
+    <Compile Include="OverrideAuthenticationAttribute.cs" />
+    <Compile Include="OverrideAuthorizationAttribute.cs" />
+    <Compile Include="OverrideExceptionFiltersAttribute.cs" />
+    <Compile Include="Routing\HttpRouteDataExtensions.cs" />
+    <Compile Include="Routing\RouteKeys.cs" />
+    <Compile Include="..\Common\Routing\Constraints\AlphaRouteConstraint.cs">
+      <Link>Routing\Constraints\AlphaRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\BoolRouteConstraint.cs">
+      <Link>Routing\Constraints\BoolRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\CompoundRouteConstraint.cs">
+      <Link>Routing\Constraints\CompoundRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\DateTimeRouteConstraint.cs">
+      <Link>Routing\Constraints\DateTimeRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\DecimalRouteConstraint.cs">
+      <Link>Routing\Constraints\DecimalRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\DoubleRouteConstraint.cs">
+      <Link>Routing\Constraints\DoubleRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\FloatRouteConstraint.cs">
+      <Link>Routing\Constraints\FloatRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\GuidRouteConstraint.cs">
+      <Link>Routing\Constraints\GuidRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\IntRouteConstraint.cs">
+      <Link>Routing\Constraints\IntRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\LengthRouteConstraint.cs">
+      <Link>Routing\Constraints\LengthRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\LongRouteConstraint.cs">
+      <Link>Routing\Constraints\LongRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\MaxLengthRouteConstraint.cs">
+      <Link>Routing\Constraints\MaxLengthRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\MaxRouteConstraint.cs">
+      <Link>Routing\Constraints\MaxRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\MinLengthRouteConstraint.cs">
+      <Link>Routing\Constraints\MinLengthRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\MinRouteConstraint.cs">
+      <Link>Routing\Constraints\MinRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\RangeRouteConstraintBase.cs">
+      <Link>Routing\Constraints\RangeRouteConstraintBase.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\RegexRouteConstraint.cs">
+      <Link>Routing\Constraints\RegexRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\Constraints\OptionalRouteConstraint.cs">
+      <Link>Routing\Constraints\OptionalRouteConstraint.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\DefaultInlineConstraintResolver.cs">
+      <Link>Routing\DefaultInlineConstraintResolver.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\InlineRouteTemplateParser.cs">
+      <Link>Routing\InlineRouteTemplateParser.cs</Link>
+    </Compile>
     <Compile Include="Routing\HttpRouteBuilder.cs" />
-    <Compile Include="Routing\HttpRouteEntry.cs" />
+    <Compile Include="..\Common\Routing\HttpRouteEntry.cs">
+      <Link>Routing\HttpRouteEntry.cs</Link>
+    </Compile>
     <Compile Include="Routing\IHttpRouteInfoProvider.cs" />
     <Compile Include="Routing\IInlineConstraintResolver.cs" />
     <Compile Include="Services\Decorator.cs" />
     <Compile Include="Services\IDecorator.cs" />
     <Compile Include="Tracing\TraceLevelHelper.cs" />
     <Compile Include="Tracing\TraceKindHelper.cs" />
+    <Compile Include="Tracing\Tracers\AuthenticationFilterTracer.cs" />
+    <Compile Include="Tracing\Tracers\OverrideFilterTracer.cs" />
     <Compile Include="Validation\IModelValidatorCache.cs" />
     <Compile Include="Validation\ModelValidatorCache.cs" />
     <Compile Include="Controllers\ResponseMessageResultConverter.cs" />
@@ -205,17 +271,31 @@
     <Compile Include="Routing\HttpRoute.cs" />
     <Compile Include="Routing\HttpRouteData.cs" />
     <Compile Include="Routing\HttpRouteDirection.cs" />
-    <Compile Include="Routing\HttpRouteParser.cs" />
+    <Compile Include="..\Common\Routing\HttpRouteParser.cs">
+      <Link>Routing\HttpRouteParser.cs</Link>
+    </Compile>
     <Compile Include="Routing\HttpRouteValueDictionary.cs" />
     <Compile Include="Routing\HttpVirtualPathData.cs" />
     <Compile Include="Routing\IHttpRouteConstraint.cs" />
     <Compile Include="Routing\MediaTypeFormatterExtensions.cs" />
-    <Compile Include="Routing\PathContentSegment.cs" />
-    <Compile Include="Routing\PathLiteralSubsegment.cs" />
-    <Compile Include="Routing\PathParameterSubsegment.cs" />
-    <Compile Include="Routing\PathSegment.cs" />
-    <Compile Include="Routing\PathSeparatorSegment.cs" />
-    <Compile Include="Routing\PathSubsegment.cs" />
+    <Compile Include="..\Common\Routing\PathContentSegment.cs">
+      <Link>Routing\PathContentSegment.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\PathLiteralSubsegment.cs">
+      <Link>Routing\PathLiteralSubsegment.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\PathParameterSubsegment.cs">
+      <Link>Routing\PathParameterSubsegment.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\PathSegment.cs">
+      <Link>Routing\PathSegment.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\PathSeparatorSegment.cs">
+      <Link>Routing\PathSeparatorSegment.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\PathSubsegment.cs">
+      <Link>Routing\PathSubsegment.cs</Link>
+    </Compile>
     <Compile Include="NonActionAttribute.cs" />
     <Compile Include="Routing\UriPathExtensionMapping.cs" />
     <Compile Include="Routing\UrlHelper.cs" />

@@ -11,21 +11,19 @@ using System.Text;
 using System.Threading;
 using System.Web.Http.Internal;
 using System.Web.Http.Properties;
+using System.Web.Http.Routing;
 
 namespace System.Web.Http.Controllers
 {
     /// <summary>
-    /// Reflection based action selector. 
+    /// Reflection based action selector.
     /// We optimize for the case where we have an <see cref="ApiControllerActionSelector"/> instance per <see cref="HttpControllerDescriptor"/>
-    /// instance but can support cases where there are many <see cref="HttpControllerDescriptor"/> instances for one 
+    /// instance but can support cases where there are many <see cref="HttpControllerDescriptor"/> instances for one
     /// <see cref="ApiControllerActionSelector"/> as well. In the latter case the lookup is slightly slower because it goes through
     /// the <see cref="P:HttpControllerDescriptor.Properties"/> dictionary.
     /// </summary>
     public class ApiControllerActionSelector : IHttpActionSelector
     {
-        private const string ActionRouteKey = "action";
-        private const string ControllerRouteKey = "controller";
-
         private ActionSelectorCacheItem _fastCache;
         private readonly object _cacheKey = new object();
 
@@ -53,6 +51,8 @@ namespace System.Web.Http.Controllers
 
         private ActionSelectorCacheItem GetInternalSelector(HttpControllerDescriptor controllerDescriptor)
         {
+            // Performance-sensitive
+
             // First check in the local fast cache and if not a match then look in the broader 
             // HttpControllerDescriptor.Properties cache
             if (_fastCache == null)
@@ -70,16 +70,21 @@ namespace System.Web.Http.Controllers
             {
                 // If the key doesn't match then lookup/create delegate in the HttpControllerDescriptor.Properties for
                 // that HttpControllerDescriptor instance
-                ActionSelectorCacheItem selector = (ActionSelectorCacheItem)controllerDescriptor.Properties.GetOrAdd(
-                    _cacheKey,
-                    _ => new ActionSelectorCacheItem(controllerDescriptor));
+                object cacheValue;
+                if (controllerDescriptor.Properties.TryGetValue(_cacheKey, out cacheValue))
+                {
+                    return (ActionSelectorCacheItem)cacheValue;
+                }
+                // Race condition on initialization has no side effects
+                ActionSelectorCacheItem selector = new ActionSelectorCacheItem(controllerDescriptor);
+                controllerDescriptor.Properties.TryAdd(_cacheKey, selector);
                 return selector;
             }
         }
 
         // All caching is in a dedicated cache class, which may be optionally shared across selector instances.
         // Make this a private nested class so that nobody else can conflict with our state.
-        // Cache is initialized during ctor on a single thread. 
+        // Cache is initialized during ctor on a single thread.
         private class ActionSelectorCacheItem
         {
             private readonly HttpControllerDescriptor _controllerDescriptor;
@@ -90,14 +95,15 @@ namespace System.Web.Http.Controllers
 
             private readonly ILookup<string, ReflectedHttpActionDescriptor> _actionNameMapping;
 
-            // Selection commonly looks up an action by verb. 
-            // Cache this mapping. These caches are completely optional and we still behave correctly if we cache miss. 
+            // Selection commonly looks up an action by verb.
+            // Cache this mapping. These caches are completely optional and we still behave correctly if we cache miss.
             // We can adjust the specific set we cache based on profiler information.
-            // Conceptually, this set of caches could be a HttpMethod --> ReflectedHttpActionDescriptor[]. 
+            // Conceptually, this set of caches could be a HttpMethod --> ReflectedHttpActionDescriptor[].
             // - Beware that HttpMethod has a very slow hash function (it does case-insensitive string hashing). So don't use Dict.
-            // - there are unbounded number of http methods, so make sure the cache doesn't grow indefinitely.  
-            // - we can build the cache at startup and don't need to continually add to it. 
+            // - there are unbounded number of http methods, so make sure the cache doesn't grow indefinitely.
+            // - we can build the cache at startup and don't need to continually add to it.
             private readonly HttpMethod[] _cacheListVerbKinds = new HttpMethod[] { HttpMethod.Get, HttpMethod.Put, HttpMethod.Post };
+
             private readonly ReflectedHttpActionDescriptor[][] _cacheListVerbs;
 
             public ActionSelectorCacheItem(HttpControllerDescriptor controllerDescriptor)
@@ -122,13 +128,13 @@ namespace System.Web.Http.Controllers
                     _actionParameterNames.Add(
                         actionDescriptor,
                         actionBinding.ParameterBindings
-                            .Where(binding => !binding.Descriptor.IsOptional && TypeHelper.IsSimpleUnderlyingType(binding.Descriptor.ParameterType) && binding.WillReadUri())
+                            .Where(binding => !binding.Descriptor.IsOptional && TypeHelper.CanConvertFromString(binding.Descriptor.ParameterType) && binding.WillReadUri())
                             .Select(binding => binding.Descriptor.Prefix ?? binding.Descriptor.ParameterName).ToArray());
                 }
 
                 _actionNameMapping = _actionDescriptors.ToLookup(actionDesc => actionDesc.ActionName, StringComparer.OrdinalIgnoreCase);
 
-                // Bucket the action descriptors by common verbs. 
+                // Bucket the action descriptors by common verbs.
                 int len = _cacheListVerbKinds.Length;
                 _cacheListVerbs = new ReflectedHttpActionDescriptor[len][];
                 for (int i = 0; i < len; i++)
@@ -145,15 +151,50 @@ namespace System.Web.Http.Controllers
             [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Caller is responsible for disposing of response instance.")]
             public HttpActionDescriptor SelectAction(HttpControllerContext controllerContext)
             {
-                string actionName;
-                bool useActionName = controllerContext.RouteData.Values.TryGetValue(ActionRouteKey, out actionName);
+                // Performance-sensitive
+                ReflectedHttpActionDescriptor[] candidateActions = GetInitialCandidateList(controllerContext);
 
-                ReflectedHttpActionDescriptor[] actionsFoundByHttpMethods;
+                // Make sure the action parameter matches the route and query parameters. Overload resolution logic is applied when needed.
+                List<ReflectedHttpActionDescriptor> actionsFoundByParams = FindActionUsingRouteAndQueryParameters(controllerContext, candidateActions);
+
+                List<ReflectedHttpActionDescriptor> selectedActions = RunSelectionFilters(controllerContext, actionsFoundByParams);
+                candidateActions = null;
+                actionsFoundByParams = null;
+
+                switch (selectedActions.Count)
+                {
+                    case 0:
+
+                        // Throws HttpResponseException with NotFound status because no action matches the request
+                        throw new HttpResponseException(controllerContext.Request.CreateErrorResponse(
+                            HttpStatusCode.NotFound,
+                            Error.Format(SRResources.ResourceNotFound, controllerContext.Request.RequestUri),
+                            Error.Format(SRResources.ApiControllerActionSelector_ActionNotFound, _controllerDescriptor.ControllerName)));
+                    case 1:
+                        return selectedActions[0];
+                    default:
+
+                        // Throws exception because multiple actions match the request
+                        string ambiguityList = CreateAmbiguousMatchList(selectedActions);
+                        throw Error.InvalidOperation(SRResources.ApiControllerActionSelector_AmbiguousMatch, ambiguityList);
+                }
+            }
+
+            [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Caller is responsible for disposing of response instance.")]
+            private ReflectedHttpActionDescriptor[] GetInitialCandidateList(HttpControllerContext controllerContext)
+            {
+                IHttpRouteData routeData = controllerContext.RouteData;
+
+                ReflectedHttpActionDescriptor[] actions = routeData.GetDirectRouteActions();
+                if (actions != null)
+                {
+                    return actions;
+                }
 
                 HttpMethod incomingMethod = controllerContext.Request.Method;
 
-                // First get an initial candidate list. 
-                if (useActionName)
+                string actionName;
+                if (routeData.Values.TryGetValue(RouteKeys.ActionKey, out actionName))
                 {
                     // We have an explicit {action} value, do traditional binding. Just lookup by actionName
                     ReflectedHttpActionDescriptor[] actionsFoundByName = _actionNameMapping[actionName].ToArray();
@@ -167,45 +208,28 @@ namespace System.Web.Http.Controllers
                             Error.Format(SRResources.ApiControllerActionSelector_ActionNameNotFound, _controllerDescriptor.ControllerName, actionName)));
                     }
 
-                    // This filters out any incompatible verbs from the incoming action list
-                    actionsFoundByHttpMethods = actionsFoundByName.Where(actionDescriptor => actionDescriptor.SupportedHttpMethods.Contains(incomingMethod)).ToArray();
+                    actions = FilterIncompatibleVerbs(incomingMethod, actionsFoundByName);
                 }
                 else
                 {
-                    // No {action} parameter, infer it from the verb.
-                    actionsFoundByHttpMethods = FindActionsForVerb(incomingMethod);
+                    // No direct routing or {action} parameter, infer it from the verb.
+                    actions = FindActionsForVerb(incomingMethod);
                 }
 
                 // Throws HttpResponseException with MethodNotAllowed status because no action matches the Http Method
-                if (actionsFoundByHttpMethods.Length == 0)
+                if (actions.Length == 0)
                 {
                     throw new HttpResponseException(controllerContext.Request.CreateErrorResponse(
                         HttpStatusCode.MethodNotAllowed,
                         Error.Format(SRResources.ApiControllerActionSelector_HttpMethodNotSupported, incomingMethod)));
                 }
 
-                // Make sure the action parameter matches the route and query parameters. Overload resolution logic is applied when needed.
-                List<ReflectedHttpActionDescriptor> actionsFoundByParams = FindActionUsingRouteAndQueryParameters(controllerContext, actionsFoundByHttpMethods, useActionName);
+                return actions;
+            }
 
-                List<ReflectedHttpActionDescriptor> selectedActions = RunSelectionFilters(controllerContext, actionsFoundByParams);
-                actionsFoundByHttpMethods = null;
-                actionsFoundByParams = null;
-
-                switch (selectedActions.Count)
-                {
-                    case 0:
-                        // Throws HttpResponseException with NotFound status because no action matches the request
-                        throw new HttpResponseException(controllerContext.Request.CreateErrorResponse(
-                            HttpStatusCode.NotFound,
-                            Error.Format(SRResources.ResourceNotFound, controllerContext.Request.RequestUri),
-                            Error.Format(SRResources.ApiControllerActionSelector_ActionNotFound, _controllerDescriptor.ControllerName)));
-                    case 1:
-                        return selectedActions[0];
-                    default:
-                        // Throws exception because multiple actions match the request
-                        string ambiguityList = CreateAmbiguousMatchList(selectedActions);
-                        throw Error.InvalidOperation(SRResources.ApiControllerActionSelector_AmbiguousMatch, ambiguityList);
-                }
+            private static ReflectedHttpActionDescriptor[] FilterIncompatibleVerbs(HttpMethod incomingMethod, ReflectedHttpActionDescriptor[] actionsFoundByName)
+            {
+                return actionsFoundByName.Where(actionDescriptor => actionDescriptor.SupportedHttpMethods.Contains(incomingMethod)).ToArray();
             }
 
             public ILookup<string, HttpActionDescriptor> GetActionMapping()
@@ -213,15 +237,12 @@ namespace System.Web.Http.Controllers
                 return new LookupAdapter() { Source = _actionNameMapping };
             }
 
-            private List<ReflectedHttpActionDescriptor> FindActionUsingRouteAndQueryParameters(HttpControllerContext controllerContext, ReflectedHttpActionDescriptor[] actionsFound, bool hasActionRouteKey)
+            private List<ReflectedHttpActionDescriptor> FindActionUsingRouteAndQueryParameters(HttpControllerContext controllerContext, ReflectedHttpActionDescriptor[] actionsFound)
             {
                 IDictionary<string, object> routeValues = controllerContext.RouteData.Values;
                 HashSet<string> routeParameterNames = new HashSet<string>(routeValues.Keys, StringComparer.OrdinalIgnoreCase);
-                routeParameterNames.Remove(ControllerRouteKey);
-                if (hasActionRouteKey)
-                {
-                    routeParameterNames.Remove(ActionRouteKey);
-                }
+                routeParameterNames.Remove(RouteKeys.ControllerKey);
+                routeParameterNames.Remove(RouteKeys.ActionKey);
 
                 HttpRequestMessage request = controllerContext.Request;
                 Uri requestUri = request.RequestUri;
@@ -251,7 +272,7 @@ namespace System.Web.Http.Controllers
                     }
                     if (matches.Count > 1)
                     {
-                        // select the results that match the most number of required parameters 
+                        // select the results that match the most number of required parameters
                         matches = matches
                             .GroupBy(descriptor => _actionParameterNames[descriptor].Length)
                             .OrderByDescending(g => g.Key)
@@ -342,25 +363,25 @@ namespace System.Web.Http.Controllers
             // Get list of actions that match a given verb. This can match by name or IActionHttpMethodSelecto
             private ReflectedHttpActionDescriptor[] FindActionsForVerb(HttpMethod verb)
             {
-                // Check cache for common verbs. 
+                // Check cache for common verbs.
                 for (int i = 0; i < _cacheListVerbKinds.Length; i++)
                 {
-                    // verb selection on common verbs is normalized to have object reference identity. 
-                    // This is significantly more efficient than comparing the verbs based on strings. 
+                    // verb selection on common verbs is normalized to have object reference identity.
+                    // This is significantly more efficient than comparing the verbs based on strings.
                     if (Object.ReferenceEquals(verb, _cacheListVerbKinds[i]))
                     {
                         return _cacheListVerbs[i];
                     }
                 }
 
-                // General case for any verbs. 
+                // General case for any verbs.
                 return FindActionsForVerbWorker(verb);
             }
 
             // This is called when we don't specify an Action name
             // Get list of actions that match a given verb. This can match by name or IActionHttpMethodSelector.
-            // Since this list is fixed for a given verb type, it can be pre-computed and cached.   
-            // This function should not do caching. It's the helper that builds the caches. 
+            // Since this list is fixed for a given verb type, it can be pre-computed and cached.
+            // This function should not do caching. It's the helper that builds the caches.
             private ReflectedHttpActionDescriptor[] FindActionsForVerbWorker(HttpMethod verb)
             {
                 List<ReflectedHttpActionDescriptor> listMethods = new List<ReflectedHttpActionDescriptor>();
@@ -412,7 +433,7 @@ namespace System.Web.Http.Controllers
 
         // We need to expose ILookup<string, HttpActionDescriptor>, but we have a ILookup<string, ReflectedHttpActionDescriptor>
         // ReflectedHttpActionDescriptor derives from HttpActionDescriptor, but ILookup doesn't support Covariance.
-        // Adapter class since ILookup doesn't support Covariance. 
+        // Adapter class since ILookup doesn't support Covariance.
         // Fortunately, IGrouping, IEnumerable support Covariance, so it's easy to forward.
         private class LookupAdapter : ILookup<string, HttpActionDescriptor>
         {

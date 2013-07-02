@@ -38,6 +38,8 @@ namespace System.Web.Http.Tracing
                     { typeof(IActionFilter), typeof(ActionFilterTracer), new string[0] },
                     { typeof(AuthorizationFilterAttribute), typeof(AuthorizationFilterAttributeTracer), new string[0] },
                     { typeof(IAuthorizationFilter), typeof(AuthorizationFilterTracer), new string[0] },
+                    { typeof(IAuthenticationFilter), typeof(AuthenticationFilterTracer), new string[0] },
+                    { typeof(IOverrideFilter), typeof(OverrideFilterTracer), new string[0] },
                     { typeof(BufferedMediaTypeFormatter), typeof(BufferedMediaTypeFormatterTracer), new string[] 
                         {
                             // Values copied in ctor
@@ -173,7 +175,9 @@ namespace System.Web.Http.Tracing
                             // Assume these are called before starting app.
                             // Tracer does not need to see them,
                             // and inner will uses its copies in read or write
-                            "SetSerializer", "RemoveSerializer"
+                            "SetSerializer", "RemoveSerializer",
+                            "GetSerializer", "GetDeserializer",
+                            "CreateXmlWriter", "CreateXmlReader"
                         }
                     },
                 };

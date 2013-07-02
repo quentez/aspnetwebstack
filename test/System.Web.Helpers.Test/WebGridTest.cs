@@ -4,9 +4,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Dynamic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Web.TestUtil;
+using System.Web.UI;
 using System.Web.WebPages;
 using Microsoft.TestCommon;
 using Moq;
@@ -1908,7 +1910,7 @@ namespace System.Web.Helpers.Test
                 "</tbody></table>", html.ToString());
             XhtmlAssert.Validate1_1(html);
         }
-
+        
         [Fact]
         public void TableRenderingWithStyles()
         {
@@ -2186,6 +2188,47 @@ namespace System.Web.Helpers.Test
                 + "</tbody></table>", html.ToString());
         }
 
+        [Fact]
+        public void CustomSorter()
+        {
+            // Arrange
+            var context = GetContext();
+            IList<Employee> employees = new List<Employee>();
+            employees.Add(new Employee { Name = "A", Salary = 10, Manager = new Employee { Name = "C" } });
+            employees.Add(new Employee { Name = "B", Salary = 20, Manager = null });
+            employees.Add(new Employee { Name = "C", Salary = 30, Manager = new Employee { Name = "A" } });
+
+            // Act
+            var grid = new WebGrid(context, defaultSort: "Salary")
+                .AddSorter("Manager.Name", (Employee x) => (x == null || x.Manager == null) ? null : x.Manager.Name);
+
+            grid.Bind(employees);
+
+            grid.SortColumn = "Manager.Name";
+            grid.SortDirection = SortDirection.Ascending;
+
+            var html = grid.Table(columns: grid.Columns(
+                grid.Column("Name"),
+                grid.Column("Manager.Name",
+                header: "Manager",
+                format: item => item.Manager == null ? "" : item.Manager.Name)));
+
+            // Assert
+            Assert.Equal(20, grid.Rows[0]["Salary"]);
+            Assert.Equal(30, grid.Rows[1]["Salary"]);
+            Assert.Equal(10, grid.Rows[2]["Salary"]);
+
+            UnitTestHelper.AssertEqualsIgnoreWhitespace(
+                "<table><thead><tr>"
+                + "<th scope=\"col\"><a href=\"?sort=Name&amp;sortdir=ASC\">Name</a></th>"
+                + "<th scope=\"col\"><a href=\"?sort=Manager.Name&amp;sortdir=DESC\">Manager</a></th>"
+                + "</tr></thead><tbody>"
+                + "<tr><td>B</td><td></td></tr>"
+                + "<tr><td>C</td><td>A</td></tr>"
+                + "<tr><td>A</td><td>C</td></tr>"
+                + "</tbody></table>", html.ToString());
+        }
+
         private static IEnumerable<Person> Iterator()
         {
             yield return new Person { FirstName = "Foo", LastName = "Bar" };
@@ -2245,6 +2288,30 @@ namespace System.Web.Helpers.Test
             // Assert
             Assert.Equal(typeof(Person), type);
         }
+
+        [Fact]
+        public void WebGridWithAttributesFromAnonymousObject_WithUnderscoreInName_TransformsUnderscoresToDashs()
+        {
+            // Arrange
+            const string expected = @"data-name=""value""";
+            const string unexpected = @"data_name=""value""";
+            var attributes = new { data_name = "value" };
+
+            var grid = new WebGrid(GetContext(), ajaxUpdateContainerId: "grid")
+                    .Bind(new[]
+            {
+                new { P1 = 1, P2 = '2', P3 = "3" },
+                new { P1 = 4, P2 = '5', P3 = "6" }
+            });
+
+            // Act
+            var htmlString = grid.GetHtml(htmlAttributes: attributes).ToHtmlString();
+
+            // Assert            
+            Assert.DoesNotContain(unexpected, htmlString);
+            Assert.Contains(expected, htmlString);
+        }
+
 
         private static IEnumerable<dynamic> Dynamics(params object[] objects)
         {

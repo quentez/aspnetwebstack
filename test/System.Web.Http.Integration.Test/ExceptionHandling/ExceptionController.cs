@@ -1,9 +1,11 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http.Controllers;
 using System.Web.Http.Filters;
@@ -56,6 +58,18 @@ namespace System.Web.Http
             return null;
         }
 
+        [AuthenticationFilterAuthenticateThrows]
+        public void AuthenticationFilterAuthenticate() { }
+
+        [AuthenticationFilterAuthenticateResultThrows]
+        public void AuthenticationFilterAuthenticateResult() { }
+
+        [AuthenticationFilterChallengeThrows]
+        public void AuthenticationFilterChallenge() { }
+
+        [AuthenticationFilterChallengeResultThrows]
+        public void AuthenticationFilterChallengeResult() { }
+
         [AuthorizationFilterThrows]
         public void AuthorizationFilter() { }
 
@@ -64,6 +78,83 @@ namespace System.Web.Http
 
         [ExceptionFilterThrows]
         public void ExceptionFilter() { throw new ArgumentException("exception"); }
+
+        private class AuthenticationFilterAttribute : Attribute, IAuthenticationFilter
+        {
+            public virtual Task AuthenticateAsync(HttpAuthenticationContext context,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult<object>(null);
+            }
+
+            public virtual Task ChallengeAsync(HttpAuthenticationChallengeContext context,
+                CancellationToken cancellationToken)
+            {
+                return Task.FromResult<object>(null);
+            }
+
+            public bool AllowMultiple
+            {
+                get { return false; }
+            }
+        }
+
+        private class AuthenticationErrorResult : IHttpActionResult
+        {
+            private readonly HttpActionContext _context;
+
+            public AuthenticationErrorResult(HttpActionContext context)
+            {
+                Contract.Assert(context != null);
+                _context = context;
+            }
+
+            public Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
+            {
+                TryThrowHttpResponseException(_context);
+                throw new ArgumentException("authentication");
+            }
+        }
+
+        private class AuthenticationFilterAuthenticateThrows : AuthenticationFilterAttribute
+        {
+            public override Task AuthenticateAsync(HttpAuthenticationContext context,
+                CancellationToken cancellationToken)
+            {
+                TryThrowHttpResponseException(context.ActionContext);
+                throw new ArgumentException("authentication");
+            }
+        }
+
+        private class AuthenticationFilterAuthenticateResultThrows : AuthenticationFilterAttribute
+        {
+            public override Task AuthenticateAsync(HttpAuthenticationContext context,
+                CancellationToken cancellationToken)
+            {
+                context.ErrorResult = new AuthenticationErrorResult(context.ActionContext);
+                return Task.FromResult<object>(null);
+            }
+        }
+
+        private class AuthenticationFilterChallengeThrows : AuthenticationFilterAttribute
+        {
+            public override Task ChallengeAsync(HttpAuthenticationChallengeContext context,
+                CancellationToken cancellationToken)
+            {
+                TryThrowHttpResponseException(context.ActionContext);
+                throw new ArgumentException("authentication");
+            }
+        }
+
+        private class AuthenticationFilterChallengeResultThrows : AuthenticationFilterAttribute
+        {
+            public override Task ChallengeAsync(HttpAuthenticationChallengeContext context,
+                CancellationToken cancellationToken)
+            {
+                context.Result = new AuthenticationErrorResult(context.ActionContext);
+                return Task.FromResult<object>(null);
+            }
+        }
 
         private class AuthorizationFilterThrows : AuthorizeAttribute
         {

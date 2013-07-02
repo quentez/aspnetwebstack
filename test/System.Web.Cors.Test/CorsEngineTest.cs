@@ -533,6 +533,21 @@ namespace System.Web.Cors.Test
         }
 
         [Fact]
+        public void TryValidateMethod_DoesCaseSensitiveComparison()
+        {
+            CorsEngine corsEngine = new CorsEngine();
+
+            CorsPolicy policy = new CorsPolicy();
+            policy.Methods.Add("POST");
+            CorsResult result = new CorsResult();
+
+            bool isValid = corsEngine.TryValidateMethod(new CorsRequestContext { AccessControlRequestMethod = "post" }, policy, result);
+            Assert.False(isValid);
+            Assert.Equal(1, result.ErrorMessages.Count);
+            Assert.Equal("The method 'post' is not allowed.", result.ErrorMessages[0]);
+        }
+
+        [Fact]
         public void TryValidateHeaders_NullPolicy_Throws()
         {
             CorsEngine corsEngine = new CorsEngine();
@@ -590,6 +605,21 @@ namespace System.Web.Cors.Test
             Assert.ThrowsArgumentNull(() =>
                 corsEngine.TryValidateOrigin(new CorsRequestContext(), new CorsPolicy(), null),
                 "result");
+        }
+
+        [Fact]
+        public void TryValidateOrigin_DoesCaseSensitiveComparison()
+        {
+            CorsEngine corsEngine = new CorsEngine();
+
+            CorsPolicy policy = new CorsPolicy();
+            policy.Origins.Add("http://Example.com");
+            CorsResult result = new CorsResult();
+
+            bool isValid = corsEngine.TryValidateOrigin(new CorsRequestContext { Origin = "http://example.com" }, policy, result);
+            Assert.False(isValid);
+            Assert.Equal(1, result.ErrorMessages.Count);
+            Assert.Equal("The origin 'http://example.com' is not allowed.", result.ErrorMessages[0]);
         }
     }
 }

@@ -21,6 +21,8 @@ namespace System.Web.Http.Controllers
 
         private IActionResultConverter _converter;
         private readonly Lazy<Collection<FilterInfo>> _filterPipeline;
+        private FilterGrouping _filterGrouping;
+        private Collection<FilterInfo> _filterPipelineForGrouping;
 
         private HttpConfiguration _configuration;
         private HttpControllerDescriptor _controllerDescriptor;
@@ -115,7 +117,10 @@ namespace System.Web.Http.Controllers
         /// <see cref="HttpResponseMessage"/>. 
         /// </summary>
         /// <remarks>
+        /// <para>This converter is not used when returning an <see cref="IHttpActionResult"/>.</para>
+        /// <para>
         /// The behavior of the returned converter should align with the action's declared <see cref="ReturnType"/>.
+        /// </para>
         /// </remarks>
         public virtual IActionResultConverter ResultConverter
         {
@@ -192,6 +197,10 @@ namespace System.Web.Http.Controllers
             {
                 return _responseMessageResultConverter;
             }
+            else if (typeof(IHttpActionResult).IsAssignableFrom(type))
+            {
+                return null;
+            }
             else
             {
                 Type valueConverterType = typeof(ValueResultConverter<>).MakeGenericType(type);
@@ -223,6 +232,20 @@ namespace System.Web.Http.Controllers
         public virtual Collection<FilterInfo> GetFilterPipeline()
         {
             return _filterPipeline.Value;
+        }
+
+        internal FilterGrouping GetFilterGrouping()
+        {
+            // Performance-sensitive
+            // Filter grouping is expensive so cache whenever possible
+            // For compatibility, the virtual method must be called
+            Collection<FilterInfo> currentFilterPipeline = GetFilterPipeline();
+            if (_filterGrouping == null || _filterPipelineForGrouping != currentFilterPipeline)
+            {
+                _filterGrouping = new FilterGrouping(currentFilterPipeline);
+                _filterPipelineForGrouping = currentFilterPipeline;
+            }
+            return _filterGrouping;
         }
 
         private Collection<FilterInfo> InitializeFilterPipeline()

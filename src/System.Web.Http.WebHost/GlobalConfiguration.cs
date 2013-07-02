@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Net.Http;
-using System.Web.Http.Controllers;
 using System.Web.Http.Dispatcher;
 using System.Web.Http.Hosting;
 using System.Web.Http.WebHost;
@@ -29,8 +28,8 @@ namespace System.Web.Http
         private static Lazy<HttpMessageHandler> _defaultHandler = new Lazy<HttpMessageHandler>(
             () => new HttpRoutingDispatcher(_configuration.Value));
 
-        private static Lazy<HttpMessageHandler> _defaultServer = new Lazy<HttpMessageHandler>(
-            () => new HttpServer(GlobalConfiguration.Configuration, GlobalConfiguration.DefaultHandler));
+        private static Lazy<HttpServer> _defaultServer = new Lazy<HttpServer>(
+            () => new HttpServer(_configuration.Value, _defaultHandler.Value));
 
         /// <summary>
         /// Gets the global <see cref="T:System.Web.Http.HttpConfiguration"/>.
@@ -49,9 +48,9 @@ namespace System.Web.Http
         }
 
         /// <summary>
-        /// Gets the global <see cref="T:System.Net.Http.HttpMessageHandler"/>.
+        /// Gets the global <see cref="T:System.Web.Http.HttpServer"/>.
         /// </summary>
-        public static HttpMessageHandler DefaultServer
+        public static HttpServer DefaultServer
         {
             get { return _defaultServer.Value; }
         }

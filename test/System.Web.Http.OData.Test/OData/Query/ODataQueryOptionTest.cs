@@ -9,6 +9,8 @@ using System.Web.Http.OData.Builder;
 using System.Web.Http.OData.Builder.TestModels;
 using System.Web.Http.OData.Query.Expressions;
 using System.Web.Http.OData.Query.Validators;
+using System.Web.Http.TestCommon;
+using Microsoft.Data.Edm;
 using Microsoft.Data.Edm.Library;
 using Microsoft.Data.OData;
 using Microsoft.TestCommon;
@@ -175,7 +177,6 @@ namespace System.Web.Http.OData.Query
         }
 
         [Fact]
-        [Trait("ODataQueryOption", "Can bind ODataQueryOption to the uri")]
         public void CanExtractQueryOptionsCorrectly()
         {
             var model = new ODataModelBuilder().Add_Customer_EntityType().Add_Customers_EntitySet().GetEdmModel();
@@ -196,6 +197,7 @@ namespace System.Web.Http.OData.Query
             Assert.NotNull(queryOptions.Skip);
             Assert.Equal("Expand", queryOptions.RawValues.Expand);
             Assert.Equal("Select", queryOptions.RawValues.Select);
+            Assert.NotNull(queryOptions.SelectExpand);
             Assert.Equal("allpages", queryOptions.RawValues.InlineCount);
             Assert.Equal("SkipToken", queryOptions.RawValues.SkipToken);
         }
@@ -330,6 +332,21 @@ namespace System.Web.Http.OData.Query
 
             // Assert
             Assert.ReferenceEquals(originalOption, queryOptions.OrderBy);
+        }
+
+        [Fact]
+        public void ApplyTo_SetsRequestSelectExpandClause_IfSelectExpandIsNotNull()
+        {
+            // Arrange
+            var model = new ODataModelBuilder().Add_Customers_EntitySet().GetEdmModel();
+            var request = new HttpRequestMessage(HttpMethod.Get, new Uri("http://server/service/Customers?$select=Name"));
+            ODataQueryOptions queryOptions = new ODataQueryOptions(new ODataQueryContext(model, typeof(Customer)), request);
+
+            // Act
+            queryOptions.ApplyTo(Enumerable.Empty<Customer>().AsQueryable());
+
+            // Assert
+            Assert.NotNull(request.GetSelectExpandClause());
         }
 
         [Fact]
@@ -644,7 +661,7 @@ namespace System.Web.Http.OData.Query
         [InlineData(8, false)]
         public void LimitResults_LimitsResults(int limit, bool resultsLimitedExpected)
         {
-            IQueryable<Customer> queryable = new List<Customer>() {
+            IQueryable queryable = new List<Customer>() {
                 new Customer() { CustomerId = 0 }, 
                 new Customer() { CustomerId = 1 },
                 new Customer() { CustomerId = 2 },
@@ -654,7 +671,7 @@ namespace System.Web.Http.OData.Query
             var context = new ODataQueryContext(model, typeof(Customer));
 
             bool resultsLimited;
-            IQueryable<Customer> result = ODataQueryOptions.LimitResults(queryable, limit, out resultsLimited);
+            IQueryable<Customer> result = ODataQueryOptions.LimitResults(queryable, limit, out resultsLimited) as IQueryable<Customer>;
 
             Assert.Equal(Math.Min(limit, 4), result.Count());
             Assert.Equal(resultsLimitedExpected, resultsLimited);
@@ -762,6 +779,82 @@ namespace System.Web.Http.OData.Query
             IEnumerator enumerator = queryable.GetEnumerator();
             Assert.True(enumerator.MoveNext());
             Assert.Equal(6, enumerator.Current);
+        }
+
+        [Fact]
+        public void ApplyTo_Entity_ThrowsArgumentNull_Entity()
+        {
+            ODataQueryContext context = new ODataQueryContext(EdmCoreModel.Instance, typeof(int));
+            ODataQueryOptions queryOptions = new ODataQueryOptions(context, new HttpRequestMessage());
+
+            Assert.ThrowsArgumentNull(
+                () => queryOptions.ApplyTo(entity: null, querySettings: new ODataQuerySettings()),
+                "entity");
+        }
+
+        [Fact]
+        public void ApplyTo_IgnoresInlineCount_IfRequestAlreadyHasInlineCount()
+        {
+            // Arrange
+            long count = 42;
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/?$inlinecount=allpages");
+            ODataQueryContext context = new ODataQueryContext(EdmCoreModel.Instance, typeof(int));
+            ODataQueryOptions options = new ODataQueryOptions(context, request);
+            request.SetInlineCount(count);
+
+            // Act
+            options.ApplyTo(Enumerable.Empty<int>().AsQueryable());
+
+            // Assert
+            Assert.Equal(count, request.GetInlineCount());
+        }
+
+        [Fact]
+        public void ApplyTo_Entity_ThrowsArgumentNull_QuerySettings()
+        {
+            ODataQueryContext context = new ODataQueryContext(EdmCoreModel.Instance, typeof(int));
+            ODataQueryOptions queryOptions = new ODataQueryOptions(context, new HttpRequestMessage());
+
+            Assert.ThrowsArgumentNull(
+                () => queryOptions.ApplyTo(entity: 42, querySettings: null),
+                "querySettings");
+        }
+
+        [Theory]
+        [InlineData("$filter=ID eq 1")]
+        [InlineData("$orderby=ID")]
+        [InlineData("$inlinecount=allpages")]
+        [InlineData("$skip=1")]
+        [InlineData("$top=0")]
+        public void ApplyTo_Entity_ThrowsInvalidOperation_IfNonSelectExpand(string parameter)
+        {
+            CustomersModelWithInheritance model = new CustomersModelWithInheritance();
+            model.Model.SetAnnotationValue(model.Customer, new ClrTypeAnnotation(typeof(Customer)));
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "http://localhost?" + parameter);
+            ODataQueryContext context = new ODataQueryContext(model.Model, typeof(Customer));
+            ODataQueryOptions queryOptions = new ODataQueryOptions(context, request);
+
+            Assert.Throws<InvalidOperationException>(
+                () => queryOptions.ApplyTo(42, new ODataQuerySettings()),
+                "The requested resource is not a collection. Query options $filter, $orderby, $inlinecount, $skip, and $top can be applied only on collections.");
+        }
+
+        [Fact]
+        public void ApplyTo_DoesnotCalculateNextPageLink_IfRequestAlreadyHasNextPageLink()
+        {
+            // Arrange
+            Uri nextPageLink = new Uri("http://localhost/nextpagelink");
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/");
+            ODataQueryContext context = new ODataQueryContext(EdmCoreModel.Instance, typeof(int));
+            ODataQueryOptions options = new ODataQueryOptions(context, request);
+            request.SetNextPageLink(nextPageLink);
+
+            // Act
+            IQueryable result = options.ApplyTo(Enumerable.Range(0, 100).AsQueryable(), new ODataQuerySettings { PageSize = 1 });
+
+            // Assert
+            Assert.Equal(nextPageLink, request.GetNextPageLink());
+            Assert.Equal(1, (result as IQueryable<int>).Count());
         }
     }
 

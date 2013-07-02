@@ -26,6 +26,7 @@ namespace System.Web.Http.Owin
         private AppFunc _next;
         private HttpMessageInvoker _messageInvoker;
         private IHostBufferPolicySelector _bufferPolicySelector;
+        private bool _disposed;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="HttpMessageHandlerAdapter" /> class.
@@ -86,7 +87,7 @@ namespace System.Web.Http.Owin
                 // Handle null responses
                 if (response == null)
                 {
-                    throw Error.InvalidOperation(SRResources.SendAsync_ReturnedNull);
+                    throw Error.InvalidOperation(OwinResources.SendAsync_ReturnedNull);
                 }
 
                 // Handle soft 404s where no route matched - call the next component
@@ -101,6 +102,7 @@ namespace System.Web.Http.Owin
                         response = await BufferResponseBodyAsync(request, response);
                     }
 
+                    FixUpContentLengthHeaders(response);
                     await SendResponseMessageAsync(environment, response);
                 }
             }
@@ -173,7 +175,7 @@ namespace System.Web.Http.Owin
             }
             else
             {
-                throw Error.InvalidOperation(SRResources.CreateRequestURI_MissingHostHeader);
+                throw Error.InvalidOperation(OwinResources.CreateRequestURI_MissingHostHeader);
             }
 
             // Append request path
@@ -256,15 +258,51 @@ namespace System.Web.Http.Owin
 
         private static async Task<HttpResponseMessage> BufferResponseBodyAsync(HttpRequestMessage request, HttpResponseMessage response)
         {
+            Exception exception = null;
             try
             {
                 await response.Content.LoadIntoBufferAsync();
-                return response;
             }
-            catch (Exception exception)
+            catch (Exception e)
+            {
+                exception = e;
+            }
+
+            // If the content can't be buffered, create a buffered error response for the exception
+            // This code will commonly run when a formatter throws during the process of serialization
+            if (exception != null)
             {
                 response.Dispose();
-                return request.CreateErrorResponse(HttpStatusCode.InternalServerError, exception);
+                response = request.CreateErrorResponse(HttpStatusCode.InternalServerError, exception);
+                await response.Content.LoadIntoBufferAsync();
+            }
+            return response;
+        }
+
+        // Responsible for setting Content-Length and Transfer-Encoding if needed
+        private static void FixUpContentLengthHeaders(HttpResponseMessage response)
+        {
+            HttpContent responseContent = response.Content;
+            if (responseContent != null)
+            {
+                if (response.Headers.TransferEncodingChunked == true)
+                {
+                    // According to section 4.4 of the HTTP 1.1 spec, HTTP responses that use chunked transfer
+                    // encoding must not have a content length set. Chunked should take precedence over content
+                    // length in this case because chunked is always set explicitly by users while the Content-Length
+                    // header can be added implicitly by System.Net.Http.
+                    responseContent.Headers.ContentLength = null;
+                }
+                else
+                {
+                    // Triggers delayed content-length calculations.
+                    if (responseContent.Headers.ContentLength == null)
+                    {
+                        // If there is no content-length we can compute, then the response should use
+                        // chunked transfer encoding to prevent the server from buffering the content
+                        response.Headers.TransferEncodingChunked = true;
+                    }
+                }
             }
         }
 
@@ -277,27 +315,27 @@ namespace System.Web.Http.Owin
             IDictionary<string, string[]> responseHeaders = environment.GetOwinValue<IDictionary<string, string[]>>(OwinConstants.ResponseHeadersKey);
             foreach (KeyValuePair<string, IEnumerable<string>> header in response.Headers)
             {
-                responseHeaders[header.Key] = header.Value.ToArray();
+                responseHeaders[header.Key] = header.Value.AsArray();
             }
 
-            if (response.Content == null)
+            HttpContent responseContent = response.Content;
+            if (responseContent == null)
             {
+                // Set the content-length to 0 to prevent the server from sending back the response chunked
+                responseHeaders["Content-Length"] = new string[] { "0" };
                 return TaskHelpers.Completed();
             }
             else
             {
-                // Trigger delayed content-length calculations before enumerating the headers.
-                response.Content.Headers.ContentLength = response.Content.Headers.ContentLength;
-
                 // Copy content headers
-                foreach (KeyValuePair<string, IEnumerable<string>> contentHeader in response.Content.Headers)
+                foreach (KeyValuePair<string, IEnumerable<string>> contentHeader in responseContent.Headers)
                 {
-                    responseHeaders[contentHeader.Key] = contentHeader.Value.ToArray();
+                    responseHeaders[contentHeader.Key] = contentHeader.Value.AsArray();
                 }
 
                 // Copy body
                 Stream responseBody = environment.GetOwinValue<Stream>(OwinConstants.ResponseBodyKey);
-                return response.Content.CopyToAsync(responseBody);
+                return responseContent.CopyToAsync(responseBody);
             }
         }
 
@@ -307,7 +345,11 @@ namespace System.Web.Http.Owin
         /// <param name="disposing"><c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
         {
-            _messageInvoker.Dispose();
+            if (!_disposed)
+            {
+                _disposed = true;
+                _messageInvoker.Dispose();
+            }
         }
 
         /// <inheritdoc />

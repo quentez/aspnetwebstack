@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
@@ -27,7 +28,10 @@ namespace System.Web.Http.WebHost
     [SuppressMessage("Microsoft.Design", "CA1001:Implement IDisposable", Justification = "HttpMessageInvoker doesn’t have any resources of its own to dispose.")]
     public class HttpControllerHandler : HttpTaskAsyncHandler
     {
-        internal static readonly string HttpContextBaseKey = "MS_HttpContext";
+        // See Microsoft.Owin.Host.SystemWeb.
+        internal static readonly string OwinEnvironmentHttpContextKey = "owin.Environment";
+
+        internal static readonly string OwinEnvironmentKey = "MS_OwinEnvironment";
 
         private static readonly Lazy<Action<HttpContextBase>> _suppressRedirectAction =
             new Lazy<Action<HttpContextBase>>(
@@ -201,7 +205,15 @@ namespace System.Web.Http.WebHost
             }
 
             // Add context to enable route lookup later on
-            request.Properties.Add(HttpContextBaseKey, httpContextBase);
+            request.SetHttpContext(httpContextBase);
+
+            IDictionary httpContextItems = httpContextBase.Items;
+
+            // Add the OWIN environment, when available (such as when using the OWIN integrated pipeline HTTP module).
+            if (httpContextItems != null && httpContextItems.Contains(OwinEnvironmentHttpContextKey))
+            {
+                request.Properties.Add(OwinEnvironmentKey, httpContextItems[OwinEnvironmentHttpContextKey]);
+            }
 
             // Add the retrieve client certificate delegate to the property bag to enable lookup later on
             request.Properties.Add(HttpPropertyKeys.RetrieveClientCertificateDelegateKey, _retrieveClientCertificate);
@@ -481,8 +493,8 @@ namespace System.Web.Http.WebHost
 
             X509Certificate2 result = null;
 
-            HttpContextBase httpContextBase;
-            if (request.Properties.TryGetValue(HttpControllerHandler.HttpContextBaseKey, out httpContextBase))
+            HttpContextBase httpContextBase = request.GetHttpContext();
+            if (httpContextBase != null)
             {
                 if (httpContextBase.Request.ClientCertificate.Certificate != null && httpContextBase.Request.ClientCertificate.Certificate.Length > 0)
                 {

@@ -55,10 +55,10 @@ namespace Microsoft.Web.Mvc
         {
             var rule = new ModelClientValidationRule
             {
-                ValidationType = "accept",
+                ValidationType = "extension",
                 ErrorMessage = FormatErrorMessage(metadata.GetDisplayName())
             };
-            rule.ValidationParameters["exts"] = ExtensionsNormalized;
+            rule.ValidationParameters["extension"] = ExtensionsNormalized;
             yield return rule;
         }
 

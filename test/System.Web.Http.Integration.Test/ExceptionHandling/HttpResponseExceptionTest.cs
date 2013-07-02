@@ -24,6 +24,8 @@ namespace System.Web.Http.ExceptionHandling
         //[InlineData("RequestMessageHandler")]
         //[InlineData("ResponseMessageHandler")]
         [InlineData("RequestAuthorization")]
+        [InlineData("AuthenticationAuthenticate")]
+        [InlineData("AuthenticationChallenge")]
         [InlineData("BeforeActionExecuted")]
         [InlineData("AfterActionExecuted")]
         [InlineData("ContentNegotiatorNegotiate")]
@@ -66,6 +68,7 @@ namespace System.Web.Http.ExceptionHandling
                     config.MessageHandlers.Add(new CustomMessageHandler(throwAt));
                     config.Filters.Add(new CustomActionFilterAttribute(throwAt));
                     config.Filters.Add(new CustomAuthorizationFilterAttribute(throwAt));
+                    config.Filters.Add(new CustomAuthenticationFilter(throwAt));
                     config.Filters.Add(new CustomExceptionFilterAttribute(throwAt));
                     config.Formatters.Clear();
                     config.Formatters.Add(new CustomJsonMediaTypeFormatter(throwAt));
@@ -113,6 +116,33 @@ namespace System.Web.Http.ExceptionHandling
             ExceptionTestsUtility.CheckForThrow(throwAt, "ActionMethodAndExceptionFilter");
 
             return message;
+        }
+    }
+
+    public class CustomAuthenticationFilter : IAuthenticationFilter
+    {
+        private string _throwAt;
+
+        public CustomAuthenticationFilter(string throwAt)
+        {
+            _throwAt = throwAt;
+        }
+
+        public Task AuthenticateAsync(HttpAuthenticationContext context, CancellationToken cancellationToken)
+        {
+            ExceptionTestsUtility.CheckForThrow(_throwAt, "AuthenticationAuthenticate");
+            return Task.FromResult<object>(null);
+        }
+
+        public Task ChallengeAsync(HttpAuthenticationChallengeContext context, CancellationToken cancellationToken)
+        {
+            ExceptionTestsUtility.CheckForThrow(_throwAt, "AuthenticationChallenge");
+            return Task.FromResult<object>(null);
+        }
+
+        public bool AllowMultiple
+        {
+            get { return false; }
         }
     }
 

@@ -3,10 +3,14 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Net.Http;
 using System.Web.Http.Controllers;
 using System.Web.Http.Dispatcher;
+using System.Web.Http.Filters;
+using System.Web.Http.Hosting;
 using System.Web.Http.ModelBinding;
 using System.Web.Http.ModelBinding.Binders;
 using System.Web.Http.Properties;
@@ -79,24 +83,52 @@ namespace System.Web.Http
             List<HttpRouteEntry> attributeRoutes = new List<HttpRouteEntry>();
 
             IHttpControllerSelector controllerSelector = configuration.Services.GetHttpControllerSelector();
-            IHttpActionSelector actionSelector = configuration.Services.GetActionSelector();
-            foreach (HttpControllerDescriptor controllerDescriptor in controllerSelector.GetControllerMapping().Values)
+            IDictionary<string, HttpControllerDescriptor> controllerMapping = controllerSelector.GetControllerMapping();
+            if (controllerMapping != null)
             {
-                Collection<RoutePrefixAttribute> routePrefixes = controllerDescriptor.GetCustomAttributes<RoutePrefixAttribute>(inherit: false);
-
-                foreach (IGrouping<string, HttpActionDescriptor> actionGrouping in actionSelector.GetActionMapping(controllerDescriptor))
+                foreach (HttpControllerDescriptor controllerDescriptor in controllerMapping.Values)
                 {
-                    string controllerName = controllerDescriptor.ControllerName;
-                    attributeRoutes.AddRange(CreateAttributeRoutes(routeBuilder, controllerName, routePrefixes, actionGrouping));
+                    Collection<RoutePrefixAttribute> routePrefixes = controllerDescriptor.GetCustomAttributes<RoutePrefixAttribute>(inherit: false);
+                    IHttpActionSelector actionSelector = controllerDescriptor.Configuration.Services.GetActionSelector();
+                    ILookup<string, HttpActionDescriptor> actionMapping = actionSelector.GetActionMapping(controllerDescriptor);
+                    if (actionMapping != null)
+                    {
+                        foreach (IGrouping<string, HttpActionDescriptor> actionGrouping in actionMapping)
+                        {
+                            string controllerName = controllerDescriptor.ControllerName;
+                            attributeRoutes.AddRange(CreateAttributeRoutes(routeBuilder, controllerName, routePrefixes, actionGrouping));
+                        }
+                    }
+                }
+
+                attributeRoutes.Sort();
+
+                foreach (HttpRouteEntry attributeRoute in attributeRoutes)
+                {
+                    configuration.Routes.Add(attributeRoute.Name, attributeRoute.Route);
                 }
             }
+        }
 
-            attributeRoutes.Sort();
-
-            foreach (HttpRouteEntry attributeRoute in attributeRoutes)
+        /// <summary>Enables suppression of the host's principal.</summary>
+        /// <param name="configuration">The server configuration.</param>
+        /// <remarks>
+        /// When the host's principal is suppressed, the current principal is set to anonymous upon entering the
+        /// <see cref="HttpServer"/>'s first message handler. As a result, any authentication performed by the host is
+        /// ignored. The remaining pipeline within the <see cref="HttpServer"/>, including
+        /// <see cref="IAuthenticationFilter"/>s, is then the exclusive authority for authentication.
+        /// </remarks>
+        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope",
+            Justification = "Message handler should be disposed with parent configuration.")]
+        public static void SuppressHostPrincipal(this HttpConfiguration configuration)
+        {
+            if (configuration == null)
             {
-                configuration.Routes.Add(attributeRoute.Name, attributeRoute.Route);
+                throw new ArgumentNullException("configuration");
             }
+
+            Contract.Assert(configuration.MessageHandlers != null);
+            configuration.MessageHandlers.Insert(0, new SuppressHostPrincipalMessageHandler(configuration));
         }
 
         private static List<HttpRouteEntry> CreateAttributeRoutes(HttpRouteBuilder routeBuilder, string controllerName,

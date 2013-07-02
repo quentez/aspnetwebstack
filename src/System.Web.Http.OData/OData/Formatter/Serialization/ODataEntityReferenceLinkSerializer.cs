@@ -36,14 +36,17 @@ namespace System.Web.Http.OData.Formatter.Serialization
             }
 
             IEdmEntitySet entitySet = writeContext.EntitySet;
-
             if (entitySet == null)
             {
                 throw new SerializationException(SRResources.EntitySetMissingDuringSerialization);
             }
 
-            IEdmNavigationProperty navigationProperty = GetNavigationProperty(writeContext.Path);
+            if (writeContext.Path == null)
+            {
+                throw new SerializationException(SRResources.ODataPathMissing);
+            }
 
+            IEdmNavigationProperty navigationProperty = writeContext.Path.GetNavigationProperty();
             if (navigationProperty == null)
             {
                 throw new SerializationException(SRResources.NavigationPropertyMissingDuringSerialization);
@@ -51,24 +54,20 @@ namespace System.Web.Http.OData.Formatter.Serialization
 
             if (graph != null)
             {
-                Uri uri = graph as Uri;
-                if (uri == null)
+                ODataEntityReferenceLink entityReferenceLink = graph as ODataEntityReferenceLink;
+                if (entityReferenceLink == null)
                 {
-                    throw new SerializationException(Error.Format(SRResources.CannotWriteType, GetType().Name, graph.GetType().FullName));
+                    Uri uri = graph as Uri;
+                    if (uri == null)
+                    {
+                        throw new SerializationException(Error.Format(SRResources.CannotWriteType, GetType().Name, graph.GetType().FullName));
+                    }
+
+                    entityReferenceLink = new ODataEntityReferenceLink { Url = uri };
                 }
 
-                messageWriter.WriteEntityReferenceLink(new ODataEntityReferenceLink { Url = uri }, entitySet, navigationProperty);
+                messageWriter.WriteEntityReferenceLink(entityReferenceLink, entitySet, navigationProperty);
             }
-        }
-
-        private static IEdmNavigationProperty GetNavigationProperty(ODataPath path)
-        {
-            if (path == null)
-            {
-                throw new SerializationException(SRResources.ODataPathMissing);
-            }
-
-            return path.GetNavigationProperty();
         }
     }
 }

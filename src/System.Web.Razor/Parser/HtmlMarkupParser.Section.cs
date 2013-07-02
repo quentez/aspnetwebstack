@@ -96,7 +96,7 @@ namespace System.Web.Razor.Parser
                 {
                     foreach (string component in nestingSequenceComponents)
                     {
-                        if (!String.Equals(CurrentSymbol.Content, component, Comparison))
+                        if (!EndOfFile && !String.Equals(CurrentSymbol.Content, component, Comparison))
                         {
                             return false;
                         }
@@ -163,9 +163,16 @@ namespace System.Web.Razor.Parser
                         Accept(preSequence);
                     }
 
-                    // Accept the sequence if it isn't the last one
-                    if (currentNesting + retIfMatched != 0)
+                    if (currentNesting + retIfMatched == 0)
                     {
+                        // This is 'popping' the final entry on the stack of nesting sequences
+                        // A caller higher in the parsing stack will accept the sequence token, so advance
+                        // to it
+                        Context.Source.Position = sequenceToken.Start.AbsoluteIndex;
+                    }
+                    else
+                    {
+                        // This isn't the end of the last nesting sequence, accept the token and keep going
                         Accept(sequenceToken);
 
                         // Position at the start of the postSequence symbol

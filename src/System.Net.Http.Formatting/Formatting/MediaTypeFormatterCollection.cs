@@ -17,6 +17,8 @@ namespace System.Net.Http.Formatting
     {
         private static readonly Type _mediaTypeFormatterType = typeof(MediaTypeFormatter);
 
+        private MediaTypeFormatter[] _writingFormatters;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="MediaTypeFormatterCollection"/> class.
         /// </summary>
@@ -37,6 +39,8 @@ namespace System.Net.Http.Formatting
         {
             VerifyAndSetFormatters(formatters);
         }
+
+        internal event EventHandler Changing;
 
         /// <summary>
         /// Gets the <see cref="MediaTypeFormatter"/> to use for Xml.
@@ -63,6 +67,18 @@ namespace System.Net.Http.Formatting
             get { return Items.OfType<FormUrlEncodedMediaTypeFormatter>().FirstOrDefault(); }
         }
 #endif
+
+        internal MediaTypeFormatter[] WritingFormatters
+        {
+            get
+            {
+                if (_writingFormatters == null)
+                {
+                    _writingFormatters = GetWritingFormatters();
+                }
+                return _writingFormatters;
+            }
+        }
 
         /// <summary>
         /// Helper to search a collection for a formatter that can read the .NET type in the given mediaType.
@@ -141,9 +157,53 @@ namespace System.Net.Http.Formatting
         {
             return
 #if !NETFX_CORE
-                typeof(XmlNode).IsAssignableFrom(type) || typeof(FormDataCollection).IsAssignableFrom(type) ||
+                typeof(XmlNode).IsAssignableFrom(type) ||
+                typeof(FormDataCollection).IsAssignableFrom(type) ||
 #endif
-                FormattingUtilities.IsJTokenType(type) || typeof(XObject).IsAssignableFrom(type);
+                FormattingUtilities.IsJTokenType(type) ||
+                typeof(XObject).IsAssignableFrom(type) ||
+                typeof(Type).IsAssignableFrom(type) ||
+                type == typeof(byte[]);
+        }
+
+        protected override void ClearItems()
+        {
+            OnChanging();
+            base.ClearItems();
+        }
+
+        protected override void InsertItem(int index, MediaTypeFormatter item)
+        {
+            OnChanging();
+            base.InsertItem(index, item);
+        }
+
+        protected override void RemoveItem(int index)
+        {
+            OnChanging();
+            base.RemoveItem(index);
+        }
+
+        protected override void SetItem(int index, MediaTypeFormatter item)
+        {
+            OnChanging();
+            base.SetItem(index, item);
+        }
+
+        private void OnChanging()
+        {
+            if (Changing != null)
+            {
+                Changing(this, EventArgs.Empty);
+            }
+
+            // Clear cached state
+            _writingFormatters = null;
+        }
+
+        private MediaTypeFormatter[] GetWritingFormatters()
+        {
+            return Items.Where((formatter) => formatter != null && formatter.CanWriteAnyTypes).ToArray();
         }
 
         /// <summary>

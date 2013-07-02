@@ -340,9 +340,13 @@ namespace System.Web.Http.OData
             IEnumerable<ODataMediaTypeFormatter> odataFormatters = ODataMediaTypeFormatters.Create();
             Delta<DeltaModel> delta;
 
-            using (HttpRequestMessage request = new HttpRequestMessage())
+            using (HttpRequestMessage request = new HttpRequestMessage { RequestUri = new Uri("http://localhost") })
             {
                 IEdmEntitySet entitySet = model.EntityContainers().Single().EntitySets().Single();
+                HttpConfiguration config = new HttpConfiguration();
+                config.Routes.MapODataRoute("default", "", model);
+                request.SetODataRouteName("default");
+                request.SetConfiguration(config);
                 request.SetEdmModel(model);
                 request.SetODataPath(new ODataPath(new EntitySetPathSegment(entitySet)));
                 IEnumerable<MediaTypeFormatter> perRequestFormatters = odataFormatters.Select(
@@ -360,6 +364,34 @@ namespace System.Web.Http.OData
             object value;
             Assert.True(delta.TryGetPropertyValue(propertyName, out value));
             Assert.Equal(expectedValue, value);
+        }
+
+        public static TheoryDataSet<Type> Delta_Returns_Correct_ExpectedType_And_ActualType_DataSet
+        {
+            get
+            {
+                return new TheoryDataSet<Type>()
+                {
+                    { typeof(Customer) },
+                    { typeof(BellevueCustomer) } 
+                };
+            }
+        }
+
+        [Theory]
+        [PropertyData("Delta_Returns_Correct_ExpectedType_And_ActualType_DataSet")]
+        public void Delta_Returns_Correct_ExpectedType_And_ActualType(Type actualType)
+        { 
+            // Arrange 
+            Delta delta = new Delta<Customer>(actualType);
+
+            // Act
+            Type actualActualType = delta.EntityType;
+            Type actualExpectedType = delta.ExpectedType;
+
+            // Assert
+            Assert.Equal(typeof(Customer), actualExpectedType);
+            Assert.Equal(actualType, actualActualType);
         }
 
         public static T GetDefaultValue<T>()

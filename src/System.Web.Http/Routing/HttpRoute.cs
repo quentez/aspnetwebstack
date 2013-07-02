@@ -22,7 +22,7 @@ namespace System.Web.Http.Routing
         /// Key used to signify that a route URL generation request should include HTTP routes (e.g. Web API).
         /// If this key is not specified then no HTTP routes will match.
         /// </summary>
-        internal const string HttpRouteKey = "httproute";
+        public static readonly string HttpRouteKey = "httproute";
 
         private const string HttpMethodParameterName = "httpMethod";
 
@@ -58,13 +58,13 @@ namespace System.Web.Http.Routing
 
         public HttpRoute(string routeTemplate, HttpRouteValueDictionary defaults, HttpRouteValueDictionary constraints, HttpRouteValueDictionary dataTokens, HttpMessageHandler handler)
         {
-            _routeTemplate = String.IsNullOrWhiteSpace(routeTemplate) ? String.Empty : routeTemplate;
+            _routeTemplate = routeTemplate == null ? String.Empty : routeTemplate;
             _defaults = defaults ?? new HttpRouteValueDictionary();
             _constraints = constraints ?? new HttpRouteValueDictionary();
             _dataTokens = dataTokens ?? new HttpRouteValueDictionary();
             Handler = handler;
 
-            // The parser will throw for invalid routes. 
+            // The parser will throw for invalid routes.
             ParsedRoute = HttpRouteParser.Parse(RouteTemplate);
         }
 
@@ -105,7 +105,7 @@ namespace System.Web.Http.Routing
             }
 
             // Note: we don't validate host/port as this is expected to be done at the host level
-            string requestPath = request.RequestUri.AbsolutePath;
+            string requestPath = "/" + request.RequestUri.GetComponents(UriComponents.Path, UriFormat.Unescaped);
             if (!requestPath.StartsWith(virtualPathRoot, StringComparison.OrdinalIgnoreCase))
             {
                 return null;
@@ -122,8 +122,7 @@ namespace System.Web.Http.Routing
                 relativeRequestPath = requestPath.Substring(virtualPathLength);
             }
 
-            string decodedRelativeRequestPath = UriQueryUtility.UrlDecode(relativeRequestPath);
-            HttpRouteValueDictionary values = ParsedRoute.Match(decodedRelativeRequestPath, _defaults);
+            HttpRouteValueDictionary values = ParsedRoute.Match(relativeRequestPath, _defaults);
             if (values == null)
             {
                 // If we got back a null value set, that means the URI did not match
@@ -165,12 +164,9 @@ namespace System.Web.Http.Routing
             var newValues = GetRouteDictionaryWithoutHttpRouteKey(values);
 
             IHttpRouteData routeData = request.GetRouteData();
-            if (routeData == null)
-            {
-                return null;
-            }
+            IDictionary<string, object> requestValues = routeData == null ? null : routeData.Values;
 
-            BoundRouteTemplate result = ParsedRoute.Bind(routeData.Values, newValues, _defaults, _constraints);
+            BoundRouteTemplate result = ParsedRoute.Bind(requestValues, newValues, _defaults, _constraints);
             if (result == null)
             {
                 return null;

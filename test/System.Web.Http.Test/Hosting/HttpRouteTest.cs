@@ -9,6 +9,16 @@ namespace System.Web.Http.Hosting
 {
     public class HttpRouteTest
     {
+        [Fact]
+        public void Ctor_PreservesWhitespaceInRouteTemplate()
+        {
+            string whitespace = "   ";
+
+            HttpRoute httpRoute = new HttpRoute(whitespace);
+
+            Assert.Equal(whitespace, httpRoute.RouteTemplate);
+        }
+
         [Theory]
         [InlineData("{controller}/{id}", "/SelfHostServer", "http://localhost/SelfHostServer/Customer/999")]
         [InlineData("{controller}/{id}", "", "http://localhost/Customer/999")]
@@ -18,6 +28,8 @@ namespace System.Web.Http.Hosting
         [InlineData("{controller}/{id}", "", "http://localhost/")]
         [InlineData("{controller}/{id}", "/SelfHostServer", "http://localhost/SelfHostServer")]
         [InlineData("{controller}/{id}", "", "http://localhost")]
+        [InlineData("api", "", "http://localhost/api")]
+        [InlineData("api", "", "http://LOCALHOST/API")]
         public void GetRouteDataShouldMatch(string uriTemplate, string virtualPathRoot, string requestUri)
         {
             HttpRoute route = new HttpRoute(uriTemplate);
@@ -25,6 +37,7 @@ namespace System.Web.Http.Hosting
             route.Defaults.Add("id", "999");
             HttpRequestMessage request = new HttpRequestMessage();
             request.RequestUri = new Uri(requestUri);
+
             IHttpRouteData data = route.GetRouteData(virtualPathRoot, request);
 
             // Assert
@@ -51,6 +64,23 @@ namespace System.Web.Http.Hosting
             {
                 { "httproute", true },
                 { controllerKey, "Customers" }
+            };
+
+            IHttpVirtualPathData virtualPath = route.GetVirtualPath(request, values);
+
+            Assert.NotNull(virtualPath);
+            Assert.Equal("Customers", virtualPath.VirtualPath);
+        }
+
+        [Fact]
+        public void GetVirtualPath_GeneratesPathWithoutRouteData()
+        {
+            var route = new HttpRoute("{controller}");
+            var request = new HttpRequestMessage();
+            var values = new HttpRouteValueDictionary()
+            {
+                { "httproute", true },
+                { "controller", "Customers" }
             };
 
             IHttpVirtualPathData virtualPath = route.GetVirtualPath(request, values);

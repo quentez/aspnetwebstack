@@ -115,6 +115,42 @@ namespace System.Web.Http.OData.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The batch request must have &apos;{0}&apos; as the media type..
+        /// </summary>
+        internal static string BatchRequestInvalidMediaType {
+            get {
+                return ResourceManager.GetString("BatchRequestInvalidMediaType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The batch request must have a boundary specification in the &quot;Content-Type&quot; header..
+        /// </summary>
+        internal static string BatchRequestMissingBoundary {
+            get {
+                return ResourceManager.GetString("BatchRequestMissingBoundary", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The &apos;Content&apos; property on the batch request cannot be null..
+        /// </summary>
+        internal static string BatchRequestMissingContent {
+            get {
+                return ResourceManager.GetString("BatchRequestMissingContent", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The batch request must have a &quot;Content-Type&quot; header..
+        /// </summary>
+        internal static string BatchRequestMissingContentType {
+            get {
+                return ResourceManager.GetString("BatchRequestMissingContentType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to A binary operator with incompatible types was detected. Found operand types &apos;{0}&apos; and &apos;{1}&apos; for operator kind &apos;{2}&apos;..
         /// </summary>
         internal static string BinaryOperatorNotSupported {
@@ -309,6 +345,33 @@ namespace System.Web.Http.OData.Properties {
         internal static string DoesNotSupportReadInLine {
             get {
                 return ResourceManager.GetString("DoesNotSupportReadInLine", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} does not support serializing an {1} of EDM type &apos;{2}&apos;..
+        /// </summary>
+        internal static string EdmObjectCannotBeSerialized {
+            get {
+                return ResourceManager.GetString("EdmObjectCannotBeSerialized", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The property &apos;EdmObject&apos; of {0} cannot be null..
+        /// </summary>
+        internal static string EdmObjectNull {
+            get {
+                return ResourceManager.GetString("EdmObjectNull", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The EDM type of the object of type &apos;{0}&apos; is null. The EDM type of an {1} cannot be null..
+        /// </summary>
+        internal static string EdmTypeCannotBeNull {
+            get {
+                return ResourceManager.GetString("EdmTypeCannotBeNull", resourceCulture);
             }
         }
         
@@ -610,6 +673,15 @@ namespace System.Web.Http.OData.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The current batch reader state &apos;{0}&apos; is invalid. The expected state is &apos;{1}&apos;..
+        /// </summary>
+        internal static string InvalidBatchReaderState {
+            get {
+                return ResourceManager.GetString("InvalidBatchReaderState", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Invalid bindingParameter type &apos;{0}&apos;. A bindingParameter must be either an EntityType or a Collection of EntityTypes..
         /// </summary>
         internal static string InvalidBindingParameterType {
@@ -660,15 +732,6 @@ namespace System.Web.Http.OData.Properties {
         internal static string InvalidPathSegment {
             get {
                 return ResourceManager.GetString("InvalidPathSegment", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to The action &apos;{0}&apos; on controller &apos;{1}&apos; with return type &apos;{2}&apos; cannot support querying. Ensure the type of the returned content is IEnumerable, IQueryable, or a generic form of either interface..
-        /// </summary>
-        internal static string InvalidReturnTypeForQuerying {
-            get {
-                return ResourceManager.GetString("InvalidReturnTypeForQuerying", resourceCulture);
             }
         }
         
@@ -750,6 +813,15 @@ namespace System.Web.Http.OData.Properties {
         internal static string MaxAnyAllExpressionLimitExceeded {
             get {
                 return ResourceManager.GetString("MaxAnyAllExpressionLimitExceeded", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The request includes a $expand path which is too deep. The maximum depth allowed is {0}. To increase the limit, set the &apos;{1}&apos; property on QueryableAttribute or ODataValidationSettings..
+        /// </summary>
+        internal static string MaxExpandDepthExceeded {
+            get {
+                return ResourceManager.GetString("MaxExpandDepthExceeded", resourceCulture);
             }
         }
         
@@ -957,6 +1029,15 @@ namespace System.Web.Http.OData.Properties {
         internal static string NoNavigationLinkFactoryFound {
             get {
                 return ResourceManager.GetString("NoNavigationLinkFactoryFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The requested resource is not a collection. Query options $filter, $orderby, $inlinecount, $skip, and $top can be applied only on collections..
+        /// </summary>
+        internal static string NonSelectExpandOnSingleEntity {
+            get {
+                return ResourceManager.GetString("NonSelectExpandOnSingleEntity", resourceCulture);
             }
         }
         
@@ -1186,6 +1267,15 @@ namespace System.Web.Http.OData.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The EDM instance of type &apos;{0}&apos; is missing the property &apos;{1}&apos;..
+        /// </summary>
+        internal static string PropertyNotFound {
+            get {
+                return ResourceManager.GetString("PropertyNotFound", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The value for OData query &apos;{0}&apos; cannot be empty..
         /// </summary>
         internal static string QueryCannotBeEmpty {
@@ -1312,6 +1402,42 @@ namespace System.Web.Http.OData.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to &apos;select&apos; and &apos;expand&apos; cannot be both null or empty..
+        /// </summary>
+        internal static string SelectExpandEmptyOrNull {
+            get {
+                return ResourceManager.GetString("SelectExpandEmptyOrNull", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to $select does not support selections of type &apos;{0}&apos;..
+        /// </summary>
+        internal static string SelectionTypeNotSupported {
+            get {
+                return ResourceManager.GetString("SelectionTypeNotSupported", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The type &apos;{0}&apos; is not an entity type. Only entity types support $select and $expand..
+        /// </summary>
+        internal static string SelectNonEntity {
+            get {
+                return ResourceManager.GetString("SelectNonEntity", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The action &apos;{0}&apos; on controller &apos;{1}&apos; returned a {2} containing more than one element. {2} must have zero or one elements..
+        /// </summary>
+        internal static string SingleResultHasMoreThanOneEntity {
+            get {
+                return ResourceManager.GetString("SingleResultHasMoreThanOneEntity", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The limit of &apos;{0}&apos; for {1} query has been exceeded. The value from the incoming request is &apos;{2}&apos;..
         /// </summary>
         internal static string SkipTopLimitExceeded {
@@ -1429,11 +1555,29 @@ namespace System.Web.Http.OData.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to A path within the select or expand query option is not supported..
+        /// </summary>
+        internal static string UnsupportedSelectExpandPath {
+            get {
+                return ResourceManager.GetString("UnsupportedSelectExpandPath", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The query specified in the URI is not valid..
         /// </summary>
         internal static string UriQueryStringInvalid {
             get {
                 return ResourceManager.GetString("UriQueryStringInvalid", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The property &apos;Url&apos; of {0} cannot be null..
+        /// </summary>
+        internal static string UrlHelperNull {
+            get {
+                return ResourceManager.GetString("UrlHelperNull", resourceCulture);
             }
         }
         

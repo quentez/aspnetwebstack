@@ -297,9 +297,6 @@
   <data name="RouteCollection_NameNotFound" xml:space="preserve">
     <value>A route named '{0}' could not be found in the route collection.</value>
   </data>
-  <data name="ApiExplorer_DefaultDocumentation" xml:space="preserve">
-    <value>Documentation for '{0}'.</value>
-  </data>
   <data name="ParameterBindingCantHaveMultipleBodyParameters" xml:space="preserve">
     <value>Can't bind multiple parameters ('{0}' and '{1}') to the request's content.</value>
   </data>
@@ -443,5 +440,26 @@
   </data>
   <data name="AttributeRoutes_InvalidTemplate" xml:space="preserve">
     <value>The route template '{0}' on the action named '{1}' cannot start with a '/' character.</value>
+  </data>
+  <data name="BatchMediaTypeNotSupported" xml:space="preserve">
+    <value>The batch request of media type '{0}' is not supported.</value>
+  </data>
+  <data name="BatchContentTypeMissing" xml:space="preserve">
+    <value>The batch request must have a "Content-Type" header.</value>
+  </data>
+  <data name="BatchRequestMissingContent" xml:space="preserve">
+    <value>The 'Content' property on the batch request cannot be null.</value>
+  </data>
+  <data name="ApiControllerActionInvoker_InvalidHttpActionResult" xml:space="preserve">
+    <value>An object of type '{0}' was returned where an instance of IHttpActionResult was expected.</value>
+  </data>
+  <data name="ApiControllerActionInvoker_NullHttpActionResult" xml:space="preserve">
+    <value>A null value was returned where an instance of IHttpActionResult was expected.</value>
+  </data>
+  <data name="ApiController_RequestMustNotBeNull" xml:space="preserve">
+    <value>ApiController.Request must not be null.</value>
+  </data>
+  <data name="HttpControllerContext_ConfigurationMustNotBeNull" xml:space="preserve">
+    <value>HttpControllerContext.Configuration must not be null.</value>
   </data>
 </root>

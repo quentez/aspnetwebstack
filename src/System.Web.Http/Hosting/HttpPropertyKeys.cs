@@ -87,5 +87,16 @@ namespace System.Web.Http.Hosting
         /// Provides a key for the parsed query string stored in <see cref="HttpRequestMessage.Properties"/>.
         /// </summary>
         public static readonly string RequestQueryNameValuePairsKey = "MS_QueryNameValuePairs";
+
+        /// <summary>
+        /// Provides a key that indicates whether a custom route threw a <see cref="HttpResponseException"/>. The value corresponds to the
+        /// response message from <see cref="HttpResponseException.Response"/>.
+        /// </summary>
+        public static readonly string RoutingErrorResponseKey = "MS_RoutingError";
+
+        /// <summary>
+        /// Provides a key that indicates whether the request is a batch request.
+        /// </summary>
+        public static readonly string IsBatchRequest = "MS_BatchRequest";
     }
 }

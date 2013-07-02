@@ -86,8 +86,22 @@ namespace System.Web.Http.OData.Formatter.Serialization
                 "ODataEntityReferenceLinkSerializer cannot write an object of type 'System.String'.");
         }
 
-        [Fact]
-        public void ODataEntityReferenceLinkSerializer_Serializes_Uri()
+        public static TheoryDataSet<object> SerializationTestData
+        {
+            get
+            {
+                Uri uri = new Uri("http://sampleuri/");
+                return new TheoryDataSet<object>
+                {
+                    uri,
+                    new ODataEntityReferenceLink { Url = uri }
+                };
+            }
+        }
+
+        [Theory]
+        [PropertyData("SerializationTestData")]
+        public void ODataEntityReferenceLinkSerializer_Serializes_Uri(object link)
         {
             // Arrange
             ODataEntityReferenceLinkSerializer serializer = new ODataEntityReferenceLinkSerializer();
@@ -98,7 +112,7 @@ namespace System.Web.Http.OData.Formatter.Serialization
             IODataResponseMessage message = new ODataMessageWrapper(stream);
 
             // Act
-            serializer.WriteObject(new Uri("http://sampleuri/"), new ODataMessageWriter(message), writeContext);
+            serializer.WriteObject(link, new ODataMessageWriter(message), writeContext);
 
             // Assert
             stream.Seek(0, SeekOrigin.Begin);

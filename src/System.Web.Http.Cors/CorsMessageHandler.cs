@@ -1,11 +1,13 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Cors;
+using System.Web.Http.Cors.Properties;
 
 namespace System.Web.Http.Cors
 {
@@ -41,8 +43,6 @@ namespace System.Web.Http.Cors
         /// </returns>
         protected async override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
             CorsRequestContext corsRequestContext = request.GetCorsRequestContext();
             if (corsRequestContext != null)
             {
@@ -82,7 +82,6 @@ namespace System.Web.Http.Cors
         /// </exception>
         public virtual async Task<HttpResponseMessage> HandleCorsRequestAsync(HttpRequestMessage request, CorsRequestContext corsRequestContext, CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             if (request == null)
             {
                 throw new ArgumentNullException("request");
@@ -93,7 +92,7 @@ namespace System.Web.Http.Cors
             }
 
             HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
-            CorsPolicy corsPolicy = await GetCorsPolicyAsync(request);
+            CorsPolicy corsPolicy = await GetCorsPolicyAsync(request, cancellationToken);
             if (corsPolicy != null)
             {
                 CorsResult result;
@@ -122,7 +121,6 @@ namespace System.Web.Http.Cors
         /// </exception>
         public virtual async Task<HttpResponseMessage> HandleCorsPreflightRequestAsync(HttpRequestMessage request, CorsRequestContext corsRequestContext, CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             if (request == null)
             {
                 throw new ArgumentNullException("request");
@@ -132,7 +130,25 @@ namespace System.Web.Http.Cors
                 throw new ArgumentNullException("corsRequestContext");
             }
 
-            CorsPolicy corsPolicy = await GetCorsPolicyAsync(request);
+            try
+            {
+                // Make sure Access-Control-Request-Method is valid.
+                new HttpMethod(corsRequestContext.AccessControlRequestMethod);
+            }
+            catch (ArgumentException)
+            {
+                return request.CreateErrorResponse(HttpStatusCode.BadRequest,
+                        SRResources.AccessControlRequestMethodCannotBeNullOrEmpty);
+            }
+            catch (FormatException)
+            {
+                return request.CreateErrorResponse(HttpStatusCode.BadRequest,
+                    String.Format(CultureInfo.CurrentCulture,
+                        SRResources.InvalidAccessControlRequestMethod,
+                        corsRequestContext.AccessControlRequestMethod));
+            }
+
+            CorsPolicy corsPolicy = await GetCorsPolicyAsync(request, cancellationToken);
             if (corsPolicy != null)
             {
                 HttpResponseMessage response = null;
@@ -170,14 +186,14 @@ namespace System.Web.Http.Cors
             return request.CreateErrorResponse(HttpStatusCode.InternalServerError, exception);
         }
 
-        private async Task<CorsPolicy> GetCorsPolicyAsync(HttpRequestMessage request)
+        private async Task<CorsPolicy> GetCorsPolicyAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             CorsPolicy corsPolicy = null;
             ICorsPolicyProviderFactory corsPolicyProviderFactory = _httpConfiguration.GetCorsPolicyProviderFactory();
             ICorsPolicyProvider corsPolicyProvider = corsPolicyProviderFactory.GetCorsPolicyProvider(request);
             if (corsPolicyProvider != null)
             {
-                corsPolicy = await corsPolicyProvider.GetCorsPolicyAsync(request);
+                corsPolicy = await corsPolicyProvider.GetCorsPolicyAsync(request, cancellationToken);
             }
             return corsPolicy;
         }

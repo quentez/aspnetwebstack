@@ -2,7 +2,6 @@
 
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Web.Cors.Properties;
 
 namespace System.Web.Cors
@@ -97,7 +96,7 @@ namespace System.Web.Cors
             }
 
             if (policy.AllowAnyMethod ||
-                policy.Methods.Contains(requestContext.AccessControlRequestMethod, StringComparer.OrdinalIgnoreCase))
+                policy.Methods.Contains(requestContext.AccessControlRequestMethod))
             {
                 result.AllowedMethods.Add(requestContext.AccessControlRequestMethod);
             }
@@ -199,7 +198,7 @@ namespace System.Web.Cors
                         result.AllowedOrigin = CorsConstants.AnyOrigin;
                     }
                 }
-                else if (policy.Origins.Contains(requestContext.Origin, StringComparer.OrdinalIgnoreCase))
+                else if (policy.Origins.Contains(requestContext.Origin))
                 {
                     result.AllowedOrigin = requestContext.Origin;
                 }

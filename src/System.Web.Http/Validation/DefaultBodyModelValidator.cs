@@ -3,6 +3,7 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Net.Http.Formatting;
@@ -49,9 +50,8 @@ namespace System.Web.Http.Validation
                 throw Error.ArgumentNull("actionContext");
             }
 
-            if (model != null && MediaTypeFormatterCollection.IsTypeExcludedFromValidation(model.GetType()))
+            if (model != null && !ShouldValidateType(model.GetType()))
             {
-                // no validation for some DOM like types
                 return true;
             }
 
@@ -76,13 +76,43 @@ namespace System.Web.Http.Validation
             return ValidateNodeAndChildren(metadata, validationContext, container: null);
         }
 
+        /// <summary>
+        /// Determines whether instances of a particular type should be validated
+        /// </summary>
+        /// <param name="type">The type to validate.</param>
+        /// <returns><c>true</c> if the type should be validated; <c>false</c> otherwise</returns>
+        public virtual bool ShouldValidateType(Type type)
+        {
+            return !MediaTypeFormatterCollection.IsTypeExcludedFromValidation(type);
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "See comment below")]
         private bool ValidateNodeAndChildren(ModelMetadata metadata, ValidationContext validationContext, object container)
-        {            
-            object model = metadata.Model;
+        {
+            object model = null;
+            try
+            {
+                model = metadata.Model;
+            }
+            catch
+            {
+                // Retrieving the model failed - typically caused by a property getter throwing
+                // Being unable to retrieve a property is not a validation error - many properties can only be retrieved if certain conditions are met
+                // For example, Uri.AbsoluteUri throws for relative URIs but it shouldn't be considered a validation error
+                return true;
+            }
+
             bool isValid = true;
 
-            // Optimization: we don't need to recursively traverse the graph for null and primitive types
-            if (model == null || TypeHelper.IsSimpleType(model.GetType()))
+            // We don't need to recursively traverse the graph for null values
+            if (model == null)
+            {
+                return ShallowValidate(metadata, validationContext, container);
+            }
+
+            // We don't need to recursively traverse the graph for types that shouldn't be validated
+            Type modelType = model.GetType();
+            if (TypeHelper.IsSimpleType(modelType) || !ShouldValidateType(modelType))
             {
                 return ShallowValidate(metadata, validationContext, container);
             }
@@ -159,27 +189,28 @@ namespace System.Web.Http.Validation
         private static bool ShallowValidate(ModelMetadata metadata, ValidationContext validationContext, object container)
         {
             bool isValid = true;
-            string key = null;
+            string modelKey = null;
             foreach (ModelValidator validator in validationContext.ActionContext.GetValidators(metadata, validationContext.ValidatorCache))
             {
                 foreach (ModelValidationResult error in validator.Validate(metadata, container))
                 {
-                    if (key == null)
+                    if (modelKey == null)
                     {
-                        key = validationContext.RootPrefix;
+                        modelKey = validationContext.RootPrefix;
                         foreach (IKeyBuilder keyBuilder in validationContext.KeyBuilders.Reverse())
                         {
-                            key = keyBuilder.AppendTo(key);
+                            modelKey = keyBuilder.AppendTo(modelKey);
                         }
 
                         // Avoid adding model errors if the model state already contains model errors for that key
                         // We can't perform this check earlier because we compute the key string only when we detect an error
-                        if (!validationContext.ModelState.IsValidField(key))
+                        if (!validationContext.ModelState.IsValidField(modelKey))
                         {
                             return false;
                         }
                     }
-                    validationContext.ModelState.AddModelError(key, error.Message);
+                    string errorKey = ModelBindingHelper.CreatePropertyModelName(modelKey, error.MemberName);
+                    validationContext.ModelState.AddModelError(errorKey, error.Message);
                     isValid = false;
                 }
             }

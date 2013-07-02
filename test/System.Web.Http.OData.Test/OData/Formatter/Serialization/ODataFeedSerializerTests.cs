@@ -273,6 +273,32 @@ namespace System.Web.Http.OData.Formatter.Serialization
         }
 
         [Fact]
+        public void WriteObjectInline_Can_WriteCollectionOfIEdmObjects()
+        {
+            // Arrange
+            IEdmTypeReference edmType = new EdmEntityTypeReference(new EdmEntityType("NS", "Name"), isNullable: false);
+            Mock<IEdmObject> edmObject = new Mock<IEdmObject>();
+            edmObject.Setup(e => e.GetEdmType()).Returns(edmType).Verifiable();
+
+            var mockWriter = new Mock<ODataWriter>();
+
+            Mock<ODataEdmTypeSerializer> customSerializer = new Mock<ODataEdmTypeSerializer>(edmType, ODataPayloadKind.Entry);
+            customSerializer.Setup(s => s.WriteObjectInline(edmObject.Object, mockWriter.Object, _writeContext)).Verifiable();
+
+            Mock<ODataSerializerProvider> serializerProvider = new Mock<ODataSerializerProvider>();
+            serializerProvider.Setup(s => s.GetEdmTypeSerializer(edmType)).Returns(customSerializer.Object);
+
+            ODataFeedSerializer serializer = new ODataFeedSerializer(_customersType, serializerProvider.Object);
+
+            // Act
+            serializer.WriteObjectInline(new[] { edmObject.Object }, mockWriter.Object, _writeContext);
+
+            // Assert
+            edmObject.Verify();
+            customSerializer.Verify();
+        }
+
+        [Fact]
         public void WriteObjectInline_Sets_InlineCount_OnWriteStart()
         {
             // Arrange
@@ -416,6 +442,39 @@ namespace System.Web.Http.OData.Formatter.Serialization
             AtomFeedMetadata feedMetadata = feed.GetAnnotation<AtomFeedMetadata>();
             Assert.Equal(feedSelfLink, feedMetadata.SelfLink.Href);
             Assert.Equal("self", feedMetadata.SelfLink.Relation);
+        }
+
+        [Fact]
+        public void CreateODataFeed_Ignores_NextPageLink_ForInnerFeeds()
+        {
+            // Arrange
+            ODataFeedSerializer serializer = new ODataFeedSerializer(_customersType, new DefaultODataSerializerProvider());
+            Uri nextLink = new Uri("http://somelink");
+            HttpRequestMessage request = new HttpRequestMessage();
+            request.SetNextPageLink(nextLink);
+            var result = new object[0];
+
+            // Act
+            ODataFeed feed = serializer.CreateODataFeed(result, new ODataSerializerContext { Request = request, IsNested = true });
+
+            // Assert
+            Assert.Null(feed.NextPageLink);
+        }
+
+        [Fact]
+        public void CreateODataFeed_Ignores_InlineCount_ForInnerFeeds()
+        {
+            // Arrange
+            ODataFeedSerializer serializer = new ODataFeedSerializer(_customersType, new DefaultODataSerializerProvider());
+            HttpRequestMessage request = new HttpRequestMessage();
+            request.SetInlineCount(42);
+            var result = new object[0];
+
+            // Act
+            ODataFeed feed = serializer.CreateODataFeed(result, new ODataSerializerContext { Request = request, IsNested = true });
+
+            // Assert
+            Assert.Null(feed.Count);
         }
     }
 }

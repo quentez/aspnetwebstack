@@ -294,7 +294,7 @@ namespace System.Web.Http
         }
 
         [Fact]
-        public void ExecuteAsync_InvokesAuthorizationFilters_ThenInvokesModelBinding_ThenInvokesActionFilters_ThenInvokesAction()
+        public void ExecuteAsync_InvokesAuthenticationFilters_ThenInvokesAuthorizationFilters_ThenInvokesModelBinding_ThenInvokesActionFilters_ThenInvokesAction()
         {
             List<string> log = new List<string>();
             Mock<ApiController> controllerMock = new Mock<ApiController>() { CallBase = true };
@@ -314,18 +314,38 @@ namespace System.Web.Http
                 log.Add("action filters");
                 return cont();
             });
-            var authFilterMock = CreateAuthorizationFilterMock((ac, ct, cont) =>
+            var authorizationFilterMock = CreateAuthorizationFilterMock((ac, ct, cont) =>
             {
-                log.Add("auth filters");
+                log.Add("authZ filters");
                 return cont();
             });
+            Mock<IAuthenticationFilter> authenticationFilterMock = new Mock<IAuthenticationFilter>();
+            authenticationFilterMock.Setup(f => f.AuthenticateAsync(It.IsAny<HttpAuthenticationContext>(),
+                It.IsAny<CancellationToken>())).Callback(() =>
+                    {
+                        log.Add("authN filters authenticate");
+                    }).Returns(() => Task.FromResult<object>(null));
+            IHttpActionResult innerResult = null;
+            Mock<IHttpActionResult> challengeResultMock = new Mock<IHttpActionResult>();
+            challengeResultMock.Setup(r => r.ExecuteAsync(It.IsAny<CancellationToken>())).Returns(async () =>
+            {
+                HttpResponseMessage response = await innerResult.ExecuteAsync(CancellationToken.None);
+                log.Add("authN filters challenge");
+                return response;
+            });
+            authenticationFilterMock.Setup(f => f.ChallengeAsync(It.IsAny<HttpAuthenticationChallengeContext>(),
+                It.IsAny<CancellationToken>()))
+                .Callback<HttpAuthenticationChallengeContext, CancellationToken>((c, t) => {
+                    innerResult = c.Result;
+                    c.Result = challengeResultMock.Object;})
+                .Returns(() => Task.FromResult<object>(null));
 
             var selectorMock = new Mock<IHttpActionSelector>();
 
             Mock<HttpActionDescriptor> actionDescriptorMock = new Mock<HttpActionDescriptor>();
             actionDescriptorMock.Setup(ad => ad.ActionBinding).Returns(actionBindingMock.Object);
             actionDescriptorMock.Setup(ad => ad.GetFilterPipeline())
-                .Returns(new Collection<FilterInfo>(new List<FilterInfo>() { new FilterInfo(actionFilterMock.Object, FilterScope.Action), new FilterInfo(authFilterMock.Object, FilterScope.Action) }));
+                .Returns(new Collection<FilterInfo>(new List<FilterInfo>() { new FilterInfo(actionFilterMock.Object, FilterScope.Action), new FilterInfo(authorizationFilterMock.Object, FilterScope.Action), new FilterInfo(authenticationFilterMock.Object, FilterScope.Action) }));
 
             selectorMock.Setup(s => s.SelectAction(controllerContext)).Returns(actionDescriptorMock.Object);
 
@@ -345,7 +365,7 @@ namespace System.Web.Http
 
             Assert.NotNull(task);
             task.WaitUntilCompleted();
-            Assert.Equal(new string[] { "auth filters", "model binding", "action filters", "action" }, log.ToArray());
+            Assert.Equal(new string[] { "authN filters authenticate", "authZ filters", "model binding", "action filters", "action", "authN filters challenge" }, log.ToArray());
         }
 
         [Fact]
@@ -463,97 +483,21 @@ namespace System.Web.Http
         }
 
         [Fact]
-        public void InvokeActionWithActionFilters_ChainsFiltersInOrderFollowedByInnerActionContinuation()
-        {
-            // Arrange
-            List<string> log = new List<string>();
-            Mock<IActionFilter> globalFilterMock = CreateActionFilterMock((ctx, ct, continuation) =>
-            {
-                log.Add("globalFilter");
-                return continuation();
-            });
-            Mock<IActionFilter> actionFilterMock = CreateActionFilterMock((ctx, ct, continuation) =>
-            {
-                log.Add("actionFilter");
-                return continuation();
-            });
-            Func<Task<HttpResponseMessage>> innerAction = () => Task<HttpResponseMessage>.Factory.StartNew(() =>
-            {
-                log.Add("innerAction");
-                return null;
-            });
-            List<IActionFilter> filters = new List<IActionFilter>() {
-                globalFilterMock.Object,
-                actionFilterMock.Object,
-            };
-
-            // Act
-            var result = ApiController.InvokeActionWithActionFilters(_actionContextInstance, CancellationToken.None, filters, innerAction);
-
-            // Assert
-            Assert.NotNull(result);
-            var resultTask = result();
-            Assert.NotNull(resultTask);
-            resultTask.WaitUntilCompleted();
-            Assert.Equal(new[] { "globalFilter", "actionFilter", "innerAction" }, log.ToArray());
-            globalFilterMock.Verify();
-            actionFilterMock.Verify();
-        }
-
-        [Fact]
-        public void InvokeActionWithAuthorizationFilters_ChainsFiltersInOrderFollowedByInnerActionContinuation()
-        {
-            // Arrange
-            List<string> log = new List<string>();
-            Mock<IAuthorizationFilter> globalFilterMock = CreateAuthorizationFilterMock((ctx, ct, continuation) =>
-            {
-                log.Add("globalFilter");
-                return continuation();
-            });
-            Mock<IAuthorizationFilter> actionFilterMock = CreateAuthorizationFilterMock((ctx, ct, continuation) =>
-            {
-                log.Add("actionFilter");
-                return continuation();
-            });
-            Func<Task<HttpResponseMessage>> innerAction = () => Task<HttpResponseMessage>.Factory.StartNew(() =>
-            {
-                log.Add("innerAction");
-                return null;
-            });
-            List<IAuthorizationFilter> filters = new List<IAuthorizationFilter>() {
-                globalFilterMock.Object,
-                actionFilterMock.Object,
-            };
-
-            // Act
-            var result = ApiController.InvokeActionWithAuthorizationFilters(_actionContextInstance, CancellationToken.None, filters, innerAction);
-
-            // Assert
-            Assert.NotNull(result);
-            var resultTask = result();
-            Assert.NotNull(resultTask);
-            resultTask.WaitUntilCompleted();
-            Assert.Equal(new[] { "globalFilter", "actionFilter", "innerAction" }, log.ToArray());
-            globalFilterMock.Verify();
-            actionFilterMock.Verify();
-        }
-
-        [Fact]
         public void InvokeActionWithExceptionFilters_IfActionTaskIsSuccessful_ReturnsSuccessTask()
         {
             // Arrange
             List<string> log = new List<string>();
             var response = new HttpResponseMessage();
-            var actionTask = TaskHelpers.FromResult(response);
+            var actionResult = CreateStubActionResult(TaskHelpers.FromResult(response));
             var exceptionFilterMock = CreateExceptionFilterMock((ec, ct) =>
             {
                 log.Add("exceptionFilter");
                 return Task.Factory.StartNew(() => { });
             });
-            var filters = new[] { exceptionFilterMock.Object };
+            var filters = new IExceptionFilter[] { exceptionFilterMock.Object };
 
             // Act
-            var result = ApiController.InvokeActionWithExceptionFilters(() => actionTask, _actionContextInstance, CancellationToken.None, filters);
+            var result = ApiController.InvokeActionWithExceptionFilters(actionResult, _actionContextInstance, CancellationToken.None, filters);
 
             // Assert
             Assert.NotNull(result);
@@ -568,16 +512,16 @@ namespace System.Web.Http
         {
             // Arrange
             List<string> log = new List<string>();
-            var actionTask = TaskHelpers.Canceled<HttpResponseMessage>();
+            var actionResult = CreateStubActionResult(TaskHelpers.Canceled<HttpResponseMessage>());
             var exceptionFilterMock = CreateExceptionFilterMock((ec, ct) =>
             {
                 log.Add("exceptionFilter");
                 return Task.Factory.StartNew(() => { });
             });
-            var filters = new[] { exceptionFilterMock.Object };
+            var filters = new IExceptionFilter[] { exceptionFilterMock.Object };
 
             // Act
-            var result = ApiController.InvokeActionWithExceptionFilters(() => actionTask, _actionContextInstance, CancellationToken.None, filters);
+            var result = ApiController.InvokeActionWithExceptionFilters(actionResult, _actionContextInstance, CancellationToken.None, filters);
 
             // Assert
             Assert.NotNull(result);
@@ -592,7 +536,7 @@ namespace System.Web.Http
             // Arrange
             List<string> log = new List<string>();
             var exception = new Exception();
-            var actionTask = TaskHelpers.FromError<HttpResponseMessage>(exception);
+            var actionResult = CreateStubActionResult(TaskHelpers.FromError<HttpResponseMessage>(exception));
             Exception exceptionSeenByFilter = null;
             var exceptionFilterMock = CreateExceptionFilterMock((ec, ct) =>
             {
@@ -600,10 +544,10 @@ namespace System.Web.Http
                 log.Add("exceptionFilter");
                 return Task.Factory.StartNew(() => { });
             });
-            var filters = new[] { exceptionFilterMock.Object };
+            var filters = new IExceptionFilter[] { exceptionFilterMock.Object };
 
             // Act
-            var result = ApiController.InvokeActionWithExceptionFilters(() => actionTask, _actionContextInstance, CancellationToken.None, filters);
+            var result = ApiController.InvokeActionWithExceptionFilters(actionResult, _actionContextInstance, CancellationToken.None, filters);
 
             // Assert
             Assert.NotNull(result);
@@ -620,7 +564,7 @@ namespace System.Web.Http
             // Arrange
             List<string> log = new List<string>();
             var exception = new Exception();
-            var actionTask = TaskHelpers.FromError<HttpResponseMessage>(exception);
+            var actionResult = CreateStubActionResult(TaskHelpers.FromError<HttpResponseMessage>(exception));
             HttpResponseMessage globalFilterResponse = new HttpResponseMessage();
             HttpResponseMessage actionFilterResponse = new HttpResponseMessage();
             HttpResponseMessage resultSeenByGlobalFilter = null;
@@ -637,10 +581,10 @@ namespace System.Web.Http
                 ec.Response = actionFilterResponse;
                 return Task.Factory.StartNew(() => { });
             });
-            var filters = new[] { globalFilterMock.Object, actionFilterMock.Object };
+            var filters = new IExceptionFilter[] { globalFilterMock.Object, actionFilterMock.Object };
 
             // Act
-            var result = ApiController.InvokeActionWithExceptionFilters(() => actionTask, _actionContextInstance, CancellationToken.None, filters);
+            var result = ApiController.InvokeActionWithExceptionFilters(actionResult, _actionContextInstance, CancellationToken.None, filters);
 
             // Assert
             Assert.NotNull(result);
@@ -649,6 +593,137 @@ namespace System.Web.Http
             Assert.Same(globalFilterResponse, result.Result);
             Assert.Same(actionFilterResponse, resultSeenByGlobalFilter);
             Assert.Equal(new string[] { "actionFilter", "globalFilter" }, log.ToArray());
+        }
+
+        [Fact]
+        public void ExecuteAsync_RunsExceptionFilter_WhenActionThrowsException()
+        {
+            // Arrange
+            Exception expectedException = new NotImplementedException();
+            ApiController controller = new ExceptionController(expectedException);
+
+            // Act & Assert
+            TestExceptionFilter(controller, expectedException, configure: null);
+        }
+
+        [Fact]
+        public void ExecuteAsync_RunsExceptionFilter_WhenActionFilterThrowsException()
+        {
+            // Arrange
+            Exception expectedException = new NotImplementedException();
+            ApiController controller = new ExceptionlessController();
+            Mock<IActionFilter> filterMock = new Mock<IActionFilter>();
+            filterMock.Setup(f => f.ExecuteActionFilterAsync(It.IsAny<HttpActionContext>(),
+                It.IsAny<CancellationToken>(), It.IsAny<Func<Task<HttpResponseMessage>>>())).Callback(() =>
+            {
+                throw expectedException;
+            });
+            IActionFilter filter = filterMock.Object;
+
+            // Act & Assert
+            TestExceptionFilter(controller, expectedException, (configuration) =>
+                { configuration.Filters.Add(filter); });
+        }
+
+        [Fact]
+        public void ExecuteAsync_RunsExceptionFilter_WhenAuthorizationFilterThrowsException()
+        {
+            // Arrange
+            Exception expectedException = new NotImplementedException();
+            ApiController controller = new ExceptionlessController();
+            Mock<IAuthorizationFilter> filterMock = new Mock<IAuthorizationFilter>();
+            filterMock.Setup(f => f.ExecuteAuthorizationFilterAsync(It.IsAny<HttpActionContext>(),
+                It.IsAny<CancellationToken>(), It.IsAny<Func<Task<HttpResponseMessage>>>())).Callback(() =>
+            {
+                throw expectedException;
+            });
+            IAuthorizationFilter filter = filterMock.Object;
+
+            // Act & Assert
+            TestExceptionFilter(controller, expectedException, (configuration) =>
+                { configuration.Filters.Add(filter); });
+        }
+
+        [Fact]
+        public void ExecuteAsync_RunsExceptionFilter_WhenAuthenticationFilterAuthenticateThrowsException()
+        {
+            // Arrange
+            Exception expectedException = new NotImplementedException();
+            ApiController controller = new ExceptionlessController();
+            Mock<IAuthenticationFilter> filterMock = new Mock<IAuthenticationFilter>();
+            filterMock.Setup(f => f.AuthenticateAsync(It.IsAny<HttpAuthenticationContext>(),
+                It.IsAny<CancellationToken>())).Callback(() =>
+                {
+                    throw expectedException;
+                });
+            IAuthenticationFilter filter = filterMock.Object;
+
+            // Act & Assert
+            TestExceptionFilter(controller, expectedException, (configuration) =>
+            { configuration.Filters.Add(filter); });
+        }
+
+        [Fact]
+        public void ExecuteAsync_RunsExceptionFilter_WhenAuthenticationFilterChallengeThrowsException()
+        {
+            // Arrange
+            Exception expectedException = new NotImplementedException();
+            ApiController controller = new ExceptionlessController();
+            Mock<IAuthenticationFilter> filterMock = new Mock<IAuthenticationFilter>();
+            filterMock.Setup(f => f.AuthenticateAsync(It.IsAny<HttpAuthenticationContext>(),
+                It.IsAny<CancellationToken>())).Returns(() => Task.FromResult<object>(null));
+            filterMock.Setup(f => f.ChallengeAsync(It.IsAny<HttpAuthenticationChallengeContext>(),
+                It.IsAny<CancellationToken>())).Callback(() =>
+                {
+                    throw expectedException;
+                });
+            IAuthenticationFilter filter = filterMock.Object;
+
+            // Act & Assert
+            TestExceptionFilter(controller, expectedException, (configuration) =>
+            { configuration.Filters.Add(filter); });
+        }
+
+        private static void TestExceptionFilter(ApiController controller, Exception expectedException,
+            Action<HttpConfiguration> configure)
+        {
+            // Arrange
+            Exception actualException = null;
+            IHttpRouteData routeData = new HttpRouteData(new HttpRoute());
+
+            using (HttpRequestMessage request = new HttpRequestMessage())
+            using (HttpConfiguration configuration = new HttpConfiguration())
+            using (HttpResponseMessage response = new HttpResponseMessage())
+            {
+                HttpControllerContext context = new HttpControllerContext(configuration, routeData, request);
+                HttpControllerDescriptor controllerDescriptor = new HttpControllerDescriptor(configuration,
+                    "Ignored", controller.GetType());
+                context.Controller = controller;
+                context.ControllerDescriptor = controllerDescriptor;
+
+                if (configure != null)
+                {
+                    configure.Invoke(configuration);
+                }
+
+                Mock<IExceptionFilter> spy = new Mock<IExceptionFilter>();
+                spy.Setup(f => f.ExecuteExceptionFilterAsync(It.IsAny<HttpActionExecutedContext>(),
+                    It.IsAny<CancellationToken>())).Returns<HttpActionExecutedContext, CancellationToken>(
+                    (c, i) =>
+                    {
+                        actualException = c.Exception;
+                        c.Response = response;
+                        return Task.FromResult<object>(null);
+                    });
+
+                configuration.Filters.Add(spy.Object);
+
+                // Act
+                HttpResponseMessage ignore = controller.ExecuteAsync(context, CancellationToken.None).Result;
+            }
+
+            // Assert
+            Assert.Same(expectedException, actualException);
         }
 
         [Fact, RestoreThreadPrincipal]
@@ -741,6 +816,16 @@ namespace System.Web.Http
             return filterMock;
         }
 
+        private IHttpActionResult CreateStubActionResult(Task<HttpResponseMessage> task)
+        {
+            Mock<IHttpActionResult> actionResultMock = new Mock<IHttpActionResult>(MockBehavior.Strict);
+            actionResultMock.Setup(r => r.ExecuteAsync(It.IsAny<CancellationToken>())).Returns(() =>
+            {
+                return task;
+            });
+            return actionResultMock.Object;
+        }
+
         private static Mock<DefaultServices> BuildFilterProvidingServicesMock(HttpConfiguration configuration, HttpActionDescriptor action, params FilterInfo[] filters)
         {
             var servicesMock = new Mock<DefaultServices> { CallBase = true };
@@ -748,6 +833,45 @@ namespace System.Web.Http
             servicesMock.Setup(r => r.GetServices(typeof(IFilterProvider))).Returns(new[] { filterProviderMock.Object });
             filterProviderMock.Setup(fp => fp.GetFilters(configuration, action)).Returns(filters);
             return servicesMock;
+        }
+
+        public class ExceptionController : ApiController
+        {
+            private readonly Exception _exception;
+
+            public ExceptionController(Exception exception)
+            {
+                _exception = exception;
+            }
+
+            public void Get()
+            {
+                throw _exception;
+            }
+        }
+
+        public class ExceptionlessController : ApiController
+        {
+            public void Get()
+            {
+            }
+        }
+
+        public class SpyDisposeController : ApiController
+        {
+            public static bool DisposeWasCalled = false;
+
+            public SpyDisposeController()
+            {
+            }
+
+            public void Get() { }
+
+            protected override void Dispose(bool disposing)
+            {
+                DisposeWasCalled = true;
+                base.Dispose(disposing);
+            }
         }
 
         /// <summary>
@@ -770,23 +894,6 @@ namespace System.Web.Http
             {
                 get { return false; }
             }
-        }
-    }
-
-    public class SpyDisposeController : System.Web.Http.ApiController
-    {
-        public static bool DisposeWasCalled = false;
-
-        public SpyDisposeController()
-        {
-        }
-
-        public void Get() { }
-
-        protected override void Dispose(bool disposing)
-        {
-            DisposeWasCalled = true;
-            base.Dispose(disposing);
         }
     }
 }

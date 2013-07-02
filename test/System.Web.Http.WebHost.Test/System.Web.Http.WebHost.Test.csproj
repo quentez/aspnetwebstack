@@ -38,9 +38,11 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="GlobalConfigurationTest.cs" />
     <Compile Include="Routing\HttpContextBaseExtensionsTest.cs" />
     <Compile Include="Routing\HttpRequestMessageWrapperTest.cs" />
     <Compile Include="Routing\HostedHttpRouteCollectionTest.cs" />
+    <Compile Include="WebHostPrincipalServiceTest.cs" />
     <Compile Include="WebHostBufferPolicySelectorTest.cs" />
     <Compile Include="HttpControllerHandlerTest.cs" />
     <Compile Include="RouteCollectionExtensionsTest.cs" />
@@ -55,6 +57,10 @@
     <ProjectReference Include="..\..\src\System.Net.Http.Formatting\System.Net.Http.Formatting.csproj">
       <Project>{668E9021-CE84-49D9-98FB-DF125A9FCDB0}</Project>
       <Name>System.Net.Http.Formatting</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\System.Web.Http.Owin\System.Web.Http.Owin.csproj">
+      <Project>{66dd7cd7-c68f-4d0e-9f3d-3b58c49d1467}</Project>
+      <Name>System.Web.Http.Owin</Name>
     </ProjectReference>
     <ProjectReference Include="..\..\src\System.Web.Http.WebHost\System.Web.Http.WebHost.csproj">
       <Project>{A0187BC2-8325-4BB2-8697-7F955CF4173E}</Project>

@@ -15,6 +15,9 @@
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.Owin">
+      <HintPath>..\..\packages\Microsoft.Owin.1.1.0-beta1-20502-275\lib\net45\Microsoft.Owin.dll</HintPath>
+    </Reference>
     <Reference Include="Owin">
       <HintPath>..\..\packages\Owin.1.0\lib\net40\Owin.dll</HintPath>
     </Reference>
@@ -26,11 +29,17 @@
     <Compile Include="..\CommonAssemblyInfo.cs">
       <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
+    <Compile Include="..\Common\CollectionExtensions.cs">
+      <Link>Common\CollectionExtensions.cs</Link>
+    </Compile>
     <Compile Include="..\Common\DictionaryExtensions.cs">
       <Link>Common\DictionaryExtensions.cs</Link>
     </Compile>
     <Compile Include="..\Common\Error.cs">
       <Link>Common\Error.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\ListWrapperCollection.cs">
+      <Link>Common\ListWrapperCollection.cs</Link>
     </Compile>
     <Compile Include="..\Common\TaskHelpers.cs">
       <Link>Common\TaskHelpers.cs</Link>
@@ -38,18 +47,22 @@
     <Compile Include="..\Common\TaskHelpersExtensions.cs">
       <Link>Common\TaskHelpersExtensions.cs</Link>
     </Compile>
+    <Compile Include="OwinHttpConfigurationExtensions.cs" />
+    <Compile Include="HostAuthenticationFilter.cs" />
     <Compile Include="OwinBufferPolicySelector.cs" />
     <Compile Include="OwinEnvironmentExtensions.cs" />
-    <Compile Include="OwinHttpRequestMessageExtensions.cs" />
     <Compile Include="OwinConstants.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="HttpMessageHandlerAdapter.cs" />
+    <Compile Include="OwinHttpRequestMessageExtensions.cs" />
+    <Compile Include="OwinRequestExtensions.cs" />
+    <Compile Include="PassiveAuthenticationMessageHandler.cs" />
     <Compile Include="WebApiAppBuilderExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Properties\SRResources.Designer.cs">
+    <Compile Include="Properties\OwinResources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
-      <DependentUpon>SRResources.resx</DependentUpon>
+      <DependentUpon>OwinResources.resx</DependentUpon>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -66,9 +79,9 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>CommonWebApiResources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-    <EmbeddedResource Include="Properties\SRResources.resx">
+    <EmbeddedResource Include="Properties\OwinResources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>SRResources.Designer.cs</LastGenOutput>
+      <LastGenOutput>OwinResources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>

@@ -307,6 +307,19 @@ namespace System.Web.Mvc.Test
         }
 
         [Fact]
+        public void ActionWithProtocolAndRouteValueDictionary()
+        {
+            // Arrange
+            UrlHelper urlHelper = GetUrlHelper();
+
+            // Act
+            string url = urlHelper.Action("newaction", "home2", new RouteValueDictionary(new { id = "someid" }), "https");
+
+            // Assert
+            Assert.Equal("https://localhost" + MvcHelper.AppPathModifier + "/app/home2/newaction/someid", url);
+        }
+
+        [Fact]
         public void ContentWithAbsolutePath()
         {
             // Arrange
@@ -329,7 +342,7 @@ namespace System.Web.Mvc.Test
             string url = urlHelper.Content("~/Content/Image.jpg");
 
             // Assert
-            Assert.Equal(MvcHelper.AppPathModifier + "/app/Content/Image.jpg", url);
+            Assert.Equal("/app/Content/Image.jpg", url);
         }
 
         [Fact]

@@ -129,7 +129,7 @@ namespace System.Web.Http.OData.Formatter.Serialization
                     throw new SerializationException(SRResources.NullElementInCollection);
                 }
 
-                ODataEdmTypeSerializer entrySerializer = SerializerProvider.GetODataPayloadSerializer(writeContext.Model, entry.GetType()) as ODataEdmTypeSerializer;
+                ODataEdmTypeSerializer entrySerializer = SerializerProvider.GetEdmTypeSerializer(writeContext.Model, entry);
                 if (entrySerializer == null)
                 {
                     throw new SerializationException(
@@ -185,21 +185,24 @@ namespace System.Web.Http.OData.Formatter.Serialization
             // TODO: Bug 467590: remove the hardcoded feed id. Get support for it from the model builder ?
             feed.Id = "http://schemas.datacontract.org/2004/07/" + EntityCollectionType.FullName();
 
-            // If we have more OData format specific information apply it now.
-            PageResult odataFeedAnnotations = feedInstance as PageResult;
-            if (odataFeedAnnotations != null)
+            // If we have more OData format specific information apply it now, only if we are the root feed.
+            if (!writeContext.IsNested)
             {
-                feed.Count = odataFeedAnnotations.Count;
-                feed.NextPageLink = odataFeedAnnotations.NextPageLink;
-            }
-            else if (writeContext.Request != null)
-            {
-                feed.NextPageLink = writeContext.Request.GetNextPageLink();
-
-                long? inlineCount = writeContext.Request.GetInlineCount();
-                if (inlineCount.HasValue)
+                PageResult odataFeedAnnotations = feedInstance as PageResult;
+                if (odataFeedAnnotations != null)
                 {
-                    feed.Count = inlineCount.Value;
+                    feed.Count = odataFeedAnnotations.Count;
+                    feed.NextPageLink = odataFeedAnnotations.NextPageLink;
+                }
+                else if (writeContext.Request != null)
+                {
+                    feed.NextPageLink = writeContext.Request.GetNextPageLink();
+
+                    long? inlineCount = writeContext.Request.GetInlineCount();
+                    if (inlineCount.HasValue)
+                    {
+                        feed.Count = inlineCount.Value;
+                    }
                 }
             }
 

@@ -22,9 +22,9 @@ namespace System.Web.Http.Owin
                 {
                     return (T)value;
                 }
-                throw Error.InvalidOperation(SRResources.GetOwinValue_IncorrectType, key, typeof(T).Name);
+                throw Error.InvalidOperation(OwinResources.GetOwinValue_IncorrectType, key, typeof(T).Name);
             }
-            throw Error.InvalidOperation(SRResources.GetOwinValue_MissingRequiredValue, key);
+            throw Error.InvalidOperation(OwinResources.GetOwinValue_MissingRequiredValue, key);
         }
     }
 }
