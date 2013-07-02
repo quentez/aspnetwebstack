@@ -198,6 +198,69 @@ namespace System.Net.Http
             }
         }
 
+        public static async Task<HttpRequestMessage> ReadAsBatchHttpRequestMessageAsync(this HttpContent content, string host)
+        {
+            if (content == null)
+            {
+                throw Error.ArgumentNull("content");
+            }
+
+            HttpMessageContent.ValidateHttpMessageContent(content, true, true);
+
+            var stream = await content.ReadAsStreamAsync();
+            var httpRequest = new HttpUnsortedRequest();
+            var parser = new HttpRequestHeaderParser(httpRequest, HttpRequestHeaderParser.DefaultMaxRequestLineSize, HttpRequestHeaderParser.DefaultMaxHeaderSize);
+            ParserState parseStatus;
+
+            var buffer = new byte[DefaultBufferSize];
+            int bytesRead = 0;
+            int headerConsumed = 0;
+
+            while (true)
+            {
+                try
+                {
+                    bytesRead = stream.Read(buffer, 0, buffer.Length);
+                }
+                catch (Exception e)
+                {
+                    throw new IOException(Properties.Resources.HttpMessageErrorReading, e);
+                }
+
+                try
+                {
+                    parseStatus = parser.ParseBuffer(buffer, bytesRead, ref headerConsumed);
+                }
+                catch (Exception)
+                {
+                    parseStatus = ParserState.Invalid;
+                }
+
+                if (parseStatus == ParserState.Done)
+                {
+                    var httpRequestMessage = new HttpRequestMessage();
+
+                    // Set method, requestURI, and version
+                    httpRequestMessage.Method = httpRequest.Method;
+                    httpRequestMessage.RequestUri = new Uri(String.Format(CultureInfo.InvariantCulture, "{0}://{1}{2}", "http", "127.0.0.1", httpRequest.RequestUri));
+                    httpRequestMessage.Version = httpRequest.Version;
+
+                    // Set the header fields and content if any
+                    httpRequestMessage.Content = CreateHeaderFields(httpRequest.HttpHeaders, httpRequestMessage.Headers, stream, bytesRead - headerConsumed);
+
+                    return httpRequestMessage;
+                }
+                else if (parseStatus != ParserState.NeedMoreData)
+                {
+                    throw Error.InvalidOperation(Properties.Resources.HttpMessageParserError, headerConsumed, buffer);
+                }
+                else if (bytesRead == 0)
+                {
+                    throw new IOException(Properties.Resources.ReadAsHttpMessageUnexpectedTermination);
+                }
+            }
+        }
+
         /// <summary>
         /// Read the <see cref="HttpContent"/> as an <see cref="HttpResponseMessage"/>.
         /// </summary>
