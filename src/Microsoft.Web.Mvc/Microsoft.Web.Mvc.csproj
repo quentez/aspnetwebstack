@@ -7,7 +7,6 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Microsoft.Web.Mvc</RootNamespace>
     <AssemblyName>Microsoft.Web.Mvc</AssemblyName>
-    <OutputPath>..\..\bin\$(Configuration)\</OutputPath>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
@@ -32,9 +31,6 @@
   <ItemGroup>
     <Compile Include="..\CommonAssemblyInfo.cs">
       <Link>Properties\CommonAssemblyInfo.cs</Link>
-    </Compile>
-    <Compile Include="..\TransparentCommonAssemblyInfo.cs">
-      <Link>Properties\TransparentCommonAssemblyInfo.cs</Link>
     </Compile>
     <Compile Include="AcceptAttribute.cs" />
     <Compile Include="GlobalSuppressions.cs" />
@@ -177,7 +173,6 @@
     <Compile Include="Controls\RepeaterItem.cs" />
     <Compile Include="Controls\RouteValues.cs" />
     <Compile Include="Controls\TextBox.cs" />
-    <Compile Include="CookieTempDataProvider.cs" />
     <Compile Include="SkipBindingAttribute.cs" />
     <Compile Include="FormExtensions.cs" />
     <Compile Include="HtmlButtonType.cs" />

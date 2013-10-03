@@ -170,25 +170,6 @@ namespace System.Web.Http.Validation
         }
 
         [Fact]
-        public void ValidationErrorsNotAddedOnInvalidFields()
-        {
-            // Arrange
-            ModelMetadataProvider metadataProvider = new DataAnnotationsModelMetadataProvider();
-            HttpActionContext actionContext = ContextUtil.CreateActionContext();
-            object model = new Address() { Street = "Microsoft Way" };
-
-            actionContext.ModelState.AddModelError("Street", "error");
-
-            // Act
-            new DefaultBodyModelValidator().Validate(model, typeof(Address), metadataProvider, actionContext, string.Empty);
-
-            // Assert
-            Assert.Contains("Street", actionContext.ModelState.Keys);
-            ModelState streetState = actionContext.ModelState["Street"];
-            Assert.Equal(1, streetState.Errors.Count);
-        }
-
-        [Fact]
         public void ExcludedTypes_AreNotValidated()
         {
             // Arrange
@@ -222,6 +203,20 @@ namespace System.Web.Http.Validation
             Assert.False(actionContext.ModelState.IsValid);
             ModelState modelState = actionContext.ModelState["Owner"];
             Assert.Equal(1, modelState.Errors.Count);
+        }
+
+        [Fact]
+        public void Validate_DoesNotUseOverridden_GetHashCodeOrEquals()
+        {
+            // Arrange
+            ModelMetadataProvider metadataProvider = new DataAnnotationsModelMetadataProvider();
+            HttpActionContext actionContext = ContextUtil.CreateActionContext();
+            DefaultBodyModelValidator validator = new DefaultBodyModelValidator();
+            object instance = new[] { new TypeThatOverridesEquals { Funny = "hehe" }, new TypeThatOverridesEquals { Funny = "hehe" } };
+
+            // Act & Assert
+            Assert.DoesNotThrow(
+                () => validator.Validate(instance, typeof(TypeThatOverridesEquals[]), metadataProvider, actionContext, String.Empty));
         }
 
         public class Person
@@ -271,5 +266,21 @@ namespace System.Web.Http.Validation
                 yield return new ValidationResult("Error3", new[] { "Property2", "Property3" });
             }
         }
-    } 
+
+        public class TypeThatOverridesEquals
+        {
+            [StringLength(2)]
+            public string Funny { get; set; }
+
+            public override bool Equals(object obj)
+            {
+                throw new InvalidOperationException();
+            }
+
+            public override int GetHashCode()
+            {
+                throw new InvalidOperationException();
+            }
+        }
+    }
 }

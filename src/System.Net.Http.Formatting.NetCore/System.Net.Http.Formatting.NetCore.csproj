@@ -7,10 +7,12 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>System.Net.Http</RootNamespace>
     <AssemblyName>System.Net.Http.Formatting</AssemblyName>
-    <OutputPath>..\..\bin\$(Configuration)\NetCore\</OutputPath>
+    <OutputPath>$(OutputPath)NetCore\</OutputPath>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
-    <RunCodeAnalysis>false</RunCodeAnalysis>
+    <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
+    <CodeAnalysisAdditionalOptions> /assemblycomparemode:StrongNameIgnoringVersion</CodeAnalysisAdditionalOptions>
+    <CodeAnalysisSearchGlobalAssemblyCache>false</CodeAnalysisSearchGlobalAssemblyCache>
     <DefineConstants>$(DefineConstants);NETFX_CORE;ASPNETMVC;NOT_CLS_COMPLIANT</DefineConstants>
     <TargetFrameworkProfile>Profile78</TargetFrameworkProfile>
     <ProjectTypeGuids>{786C830F-07A1-408B-BD7F-6EE04809D6DB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
@@ -100,9 +102,7 @@
     <Compile Include="..\System.Net.Http.Formatting\Formatting\XmlMediaTypeFormatter.cs">
       <Link>Formatting\XmlMediaTypeFormatter.cs</Link>
     </Compile>
-    <Compile Include="..\System.Net.Http.Formatting\GlobalSuppressions.cs">
-      <Link>GlobalSuppressions.cs</Link>
-    </Compile>
+    <Compile Include="GlobalSuppressions.cs"/>
     <Compile Include="..\System.Net.Http.Formatting\Handlers\HttpProgressEventArgs.cs">
       <Link>Handlers\HttpProgressEventArgs.cs</Link>
     </Compile>
@@ -232,13 +232,13 @@
       <HintPath>..\..\packages\Newtonsoft.Json.4.5.11\lib\portable-net40+sl4+wp7+win8\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System.Net.Http">
-      <HintPath>..\..\packages\Microsoft.Net.Http.2.1.3-beta\lib\portable-net40+sl4+win8+wp71\System.Net.Http.dll</HintPath>
+      <HintPath>..\..\packages\Microsoft.Net.Http.2.2.13\lib\portable-net40+sl4+win8+wp71\System.Net.Http.dll</HintPath>
     </Reference>
     <Reference Include="System.Net.Http.Extensions">
-      <HintPath>..\..\packages\Microsoft.Net.Http.2.1.3-beta\lib\portable-net40+sl4+win8+wp71\System.Net.Http.Extensions.dll</HintPath>
+      <HintPath>..\..\packages\Microsoft.Net.Http.2.2.13\lib\portable-net40+sl4+win8+wp71\System.Net.Http.Extensions.dll</HintPath>
     </Reference>
     <Reference Include="System.Net.Http.Primitives">
-      <HintPath>..\..\packages\Microsoft.Net.Http.2.1.3-beta\lib\portable-net40+sl4+win8+wp71\System.Net.Http.Primitives.dll</HintPath>
+      <HintPath>..\..\packages\Microsoft.Net.Http.2.2.13\lib\portable-net40+sl4+win8+wp71\System.Net.Http.Primitives.dll</HintPath>
     </Reference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -250,5 +250,5 @@
   -->
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
-  <Import Project="..\..\packages\Microsoft.Bcl.Build.1.0.0-rc\tools\Microsoft.Bcl.Build.targets" />
+  <Import Project="..\..\packages\Microsoft.Bcl.Build.1.0.8\tools\Microsoft.Bcl.Build.targets" />
 </Project>

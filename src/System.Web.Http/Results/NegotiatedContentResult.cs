@@ -34,7 +34,13 @@ namespace System.Web.Http.Results
         {
         }
 
-        internal NegotiatedContentResult(HttpStatusCode statusCode, T content, ApiController controller)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="NegotiatedContentResult{T}"/> class with the values provided.
+        /// </summary>
+        /// <param name="statusCode">The HTTP status code for the response message.</param>
+        /// <param name="content">The content value to negotiate and format in the entity body.</param>
+        /// <param name="controller">The controller from which to obtain the dependencies needed for execution.</param>
+        public NegotiatedContentResult(HttpStatusCode statusCode, T content, ApiController controller)
             : this(statusCode, content, new ApiControllerDependencyProvider(controller))
         {
         }
@@ -79,7 +85,7 @@ namespace System.Web.Http.Results
         }
 
         /// <inheritdoc />
-        public Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
+        public virtual Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(Execute());
         }
@@ -101,36 +107,30 @@ namespace System.Web.Http.Results
             // Run content negotiation.
             ContentNegotiationResult result = contentNegotiator.Negotiate(typeof(T), request, formatters);
 
-            HttpResponseMessage mutableResponse = new HttpResponseMessage();
-            HttpResponseMessage response;
+            HttpResponseMessage response = new HttpResponseMessage();
 
             try
             {
                 if (result == null)
                 {
                     // A null result from content negotiation indicates that the response should be a 406.
-                    mutableResponse.StatusCode = HttpStatusCode.NotAcceptable;
+                    response.StatusCode = HttpStatusCode.NotAcceptable;
                 }
                 else
                 {
-                    mutableResponse.StatusCode = statusCode;
+                    response.StatusCode = statusCode;
                     Contract.Assert(result.Formatter != null);
                     // At this point mediaType should be a cloned value. (The content negotiator is responsible for
                     // returning a new copy.)
-                    mutableResponse.Content = new ObjectContent<T>(content, result.Formatter, result.MediaType);
+                    response.Content = new ObjectContent<T>(content, result.Formatter, result.MediaType);
                 }
 
-                mutableResponse.RequestMessage = request;
-
-                response = mutableResponse;
-                mutableResponse = null;
+                response.RequestMessage = request;
             }
-            finally
+            catch
             {
-                if (mutableResponse != null)
-                {
-                    mutableResponse.Dispose();
-                }
+                response.Dispose();
+                throw;
             }
 
             return response;
@@ -142,7 +142,7 @@ namespace System.Web.Http.Results
         /// negotiator, request message, or formatters. (The ApiController provider implementation does lazy evaluation
         /// to make that scenario work.)
         /// </remarks>
-        private interface IDependencyProvider
+        internal interface IDependencyProvider
         {
             IContentNegotiator ContentNegotiator { get; }
 
@@ -151,7 +151,7 @@ namespace System.Web.Http.Results
             IEnumerable<MediaTypeFormatter> Formatters { get; }
         }
 
-        private sealed class DirectDependencyProvider : IDependencyProvider
+        internal sealed class DirectDependencyProvider : IDependencyProvider
         {
             private readonly IContentNegotiator _contentNegotiator;
             private readonly HttpRequestMessage _request;
@@ -196,11 +196,11 @@ namespace System.Web.Http.Results
             }
         }
 
-        private sealed class ApiControllerDependencyProvider : IDependencyProvider
+        internal sealed class ApiControllerDependencyProvider : IDependencyProvider
         {
             private readonly ApiController _controller;
 
-            private IDependencyProvider _resolved;
+            private IDependencyProvider _resolvedDependencies;
 
             public ApiControllerDependencyProvider(ApiController controller)
             {
@@ -217,7 +217,7 @@ namespace System.Web.Http.Results
                 get
                 {
                     EnsureResolved();
-                    return _resolved.ContentNegotiator;
+                    return _resolvedDependencies.ContentNegotiator;
                 }
             }
 
@@ -226,7 +226,7 @@ namespace System.Web.Http.Results
                 get
                 {
                     EnsureResolved();
-                    return _resolved.Request;
+                    return _resolvedDependencies.Request;
                 }
             }
 
@@ -235,13 +235,13 @@ namespace System.Web.Http.Results
                 get
                 {
                     EnsureResolved();
-                    return _resolved.Formatters;
+                    return _resolvedDependencies.Formatters;
                 }
             }
 
             private void EnsureResolved()
             {
-                if (_resolved == null)
+                if (_resolvedDependencies == null)
                 {
                     HttpConfiguration configuration = _controller.Configuration;
 
@@ -271,7 +271,7 @@ namespace System.Web.Http.Results
                     IEnumerable<MediaTypeFormatter> formatters = configuration.Formatters;
                     Contract.Assert(formatters != null);
 
-                    _resolved = new DirectDependencyProvider(contentNegotiator, request, formatters);
+                    _resolvedDependencies = new DirectDependencyProvider(contentNegotiator, request, formatters);
                 }
             }
         }

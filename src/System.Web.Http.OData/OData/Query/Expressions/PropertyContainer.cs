@@ -69,24 +69,78 @@ namespace System.Web.Http.OData.Query.Expressions
             Contract.Assert(property != null);
             Contract.Assert(property.Value != null);
 
-            Type namedPropertyGenericType =
-                next == null
-                    ? property.AutoSelected ? typeof(AutoSelectedNamedProperty<>) : typeof(NamedProperty<>)
-                    : property.AutoSelected ? typeof(AutoSelectedNamedPropertyWithNext<>) : typeof(NamedPropertyWithNext<>);
-            Type namedPropertyType = namedPropertyGenericType.MakeGenericType(property.Value.Type);
+            Type namedPropertyType = GetNamedPropertyType(property, next);
+            List<MemberBinding> memberBindings = new List<MemberBinding>();
 
-            List<MemberBinding> memberBindings = new List<MemberBinding>
+            memberBindings.Add(Expression.Bind(namedPropertyType.GetProperty("Name"), property.Name));
+
+            if (property.PageSize == null)
             {
-                Expression.Bind(namedPropertyType.GetProperty("Name"), property.Name),
-                Expression.Bind(namedPropertyType.GetProperty("Value"), property.Value)
-            };
+                memberBindings.Add(Expression.Bind(namedPropertyType.GetProperty("Value"), property.Value));
+            }
+            else
+            {
+                memberBindings.Add(Expression.Bind(namedPropertyType.GetProperty("Collection"), property.Value));
+                memberBindings.Add(Expression.Bind(namedPropertyType.GetProperty("PageSize"), Expression.Constant(property.PageSize)));
+            }
 
             if (next != null)
             {
                 memberBindings.Add(Expression.Bind(namedPropertyType.GetProperty("Next"), next));
             }
+            if (property.NullCheck != null)
+            {
+                memberBindings.Add(Expression.Bind(namedPropertyType.GetProperty("IsNull"), property.NullCheck));
+            }
 
             return Expression.MemberInit(Expression.New(namedPropertyType), memberBindings);
+        }
+
+        private static Type GetNamedPropertyType(NamedPropertyExpression property, Expression next)
+        {
+            Type namedPropertyGenericType;
+
+            if (next == null)
+            {
+                if (property.NullCheck != null)
+                {
+                    namedPropertyGenericType = typeof(SingleExpandedProperty<>);
+                }
+                else if (property.PageSize != null)
+                {
+                    namedPropertyGenericType = typeof(CollectionExpandedProperty<>);
+                }
+                else if (property.AutoSelected)
+                {
+                    namedPropertyGenericType = typeof(AutoSelectedNamedProperty<>);
+                }
+                else
+                {
+                    namedPropertyGenericType = typeof(NamedProperty<>);
+                }
+            }
+            else
+            {
+                if (property.NullCheck != null)
+                {
+                    namedPropertyGenericType = typeof(SingleExpandedPropertyWithNext<>);
+                }
+                else if (property.PageSize != null)
+                {
+                    namedPropertyGenericType = typeof(CollectionExpandedPropertyWithNext<>);
+                }
+                else if (property.AutoSelected)
+                {
+                    namedPropertyGenericType = typeof(AutoSelectedNamedPropertyWithNext<>);
+                }
+                else
+                {
+                    namedPropertyGenericType = typeof(NamedPropertyWithNext<>);
+                }
+            }
+
+            Type elementType = property.PageSize == null ? property.Value.Type : property.Value.Type.GetInnerElementType();
+            return namedPropertyGenericType.MakeGenericType(elementType);
         }
 
         private class NamedProperty<T> : PropertyContainer
@@ -103,8 +157,13 @@ namespace System.Web.Http.OData.Query.Expressions
 
                 if (Name != null && (includeAutoSelected || !AutoSelected))
                 {
-                    dictionary.Add(Name, Value);
+                    dictionary.Add(Name, GetValue());
                 }
+            }
+
+            public virtual object GetValue()
+            {
+                return Value;
             }
         }
 
@@ -113,6 +172,28 @@ namespace System.Web.Http.OData.Query.Expressions
             public AutoSelectedNamedProperty()
             {
                 AutoSelected = true;
+            }
+        }
+
+        private class SingleExpandedProperty<T> : NamedProperty<T>
+        {
+            public bool IsNull { get; set; }
+
+            public override object GetValue()
+            {
+                return IsNull ? (object)null : Value;
+            }
+        }
+
+        private class CollectionExpandedProperty<T> : NamedProperty<T>
+        {
+            public int PageSize { get; set; }
+
+            public IEnumerable<T> Collection { get; set; }
+
+            public override object GetValue()
+            {
+                return new TruncatedCollection<T>(Collection, PageSize);
             }
         }
 
@@ -135,6 +216,28 @@ namespace System.Web.Http.OData.Query.Expressions
         }
 
         private class AutoSelectedNamedPropertyWithNext<T> : AutoSelectedNamedProperty<T>
+        {
+            public PropertyContainer Next { get; set; }
+
+            public override void ToDictionaryCore(Dictionary<string, object> dictionary, bool includeAutoSelected)
+            {
+                base.ToDictionaryCore(dictionary, includeAutoSelected);
+                Next.ToDictionaryCore(dictionary, includeAutoSelected);
+            }
+        }
+
+        private class SingleExpandedPropertyWithNext<T> : SingleExpandedProperty<T>
+        {
+            public PropertyContainer Next { get; set; }
+
+            public override void ToDictionaryCore(Dictionary<string, object> dictionary, bool includeAutoSelected)
+            {
+                base.ToDictionaryCore(dictionary, includeAutoSelected);
+                Next.ToDictionaryCore(dictionary, includeAutoSelected);
+            }
+        }
+
+        private class CollectionExpandedPropertyWithNext<T> : CollectionExpandedProperty<T>
         {
             public PropertyContainer Next { get; set; }
 

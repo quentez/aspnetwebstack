@@ -8,7 +8,6 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Web.Http;
 using System.Web.Mvc.Properties;
 
 namespace System.Web.Mvc
@@ -144,7 +143,7 @@ namespace System.Web.Mvc
 
         public virtual object BindModel(ControllerContext controllerContext, ModelBindingContext bindingContext)
         {
-            EnsureStackHelper.EnsureStack();
+            RuntimeHelpers.EnsureSufficientExecutionStack();
 
             if (bindingContext == null)
             {
@@ -835,11 +834,14 @@ namespace System.Web.Mvc
                 dictionary.Clear();
                 foreach (KeyValuePair<object, object> item in newContents)
                 {
-                    // if the item was not a T, some conversion failed. the error message will be propagated,
-                    // but in the meanwhile we need to make a placeholder element in the dictionary.
-                    TKey castKey = (TKey)item.Key; // this cast shouldn't fail
-                    TValue castValue = (item.Value is TValue) ? (TValue)item.Value : default(TValue);
-                    dictionary[castKey] = castValue;
+                    if (item.Key is TKey)
+                    {
+                        // if the item was not a T, some conversion failed. the error message will be propagated,
+                        // but in the meanwhile we need to make a placeholder element in the dictionary.
+                        TKey castKey = (TKey)item.Key; // this cast shouldn't fail
+                        TValue castValue = (item.Value is TValue) ? (TValue)item.Value : default(TValue);
+                        dictionary[castKey] = castValue;
+                    }
                 }
             }
         }

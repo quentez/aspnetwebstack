@@ -7,7 +7,6 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>System.Web.Http</RootNamespace>
     <AssemblyName>System.Web.Http</AssemblyName>
-    <OutputPath>..\..\bin\$(Configuration)\</OutputPath>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
@@ -33,9 +32,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\AptcaCommonAssemblyInfo.cs">
-      <Link>Properties\AptcaCommonAssemblyInfo.cs</Link>
-    </Compile>
     <Compile Include="..\CommonAssemblyInfo.cs">
       <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
@@ -44,9 +40,6 @@
     </Compile>
     <Compile Include="..\Common\DictionaryExtensions.cs">
       <Link>Common\DictionaryExtensions.cs</Link>
-    </Compile>
-    <Compile Include="..\Common\EnsureStackHelper.cs">
-      <Link>Common\EnsureStackHelper.cs</Link>
     </Compile>
     <Compile Include="..\Common\Error.cs">
       <Link>Common\Error.cs</Link>
@@ -74,43 +67,63 @@
     </Compile>
     <Compile Include="AcceptVerbsAttribute.cs" />
     <Compile Include="Batch\BatchExecutionOrder.cs" />
+    <Compile Include="Batch\BatchHttpRequestContext.cs" />
     <Compile Include="Batch\HttpBatchHandler.cs" />
     <Compile Include="Batch\DefaultHttpBatchHandler.cs" />
     <Compile Include="Batch\BatchHttpRequestMessageExtensions.cs" />
     <Compile Include="Controllers\ActionFilterResult.cs" />
     <Compile Include="Controllers\AuthenticationFilterResult.cs" />
     <Compile Include="Controllers\AuthorizationFilterResult.cs" />
+    <Compile Include="Controllers\ExceptionFilterResult.cs" />
+    <Compile Include="Controllers\RequestBackedHttpRequestContext.cs" />
     <Compile Include="Controllers\HttpControllerSettings.cs" />
     <Compile Include="Controllers\HttpParameterDescriptorExtensions.cs" />
+    <Compile Include="Controllers\HttpRequestContext.cs" />
     <Compile Include="Controllers\IActionResultConverter.cs" />
     <Compile Include="Controllers\HttpActionContext.cs" />
     <Compile Include="Controllers\IControllerConfiguration.cs" />
     <Compile Include="Description\ResponseTypeAttribute.cs" />
     <Compile Include="Description\ResponseDescription.cs" />
+    <Compile Include="EmptyReadOnlyDictionary.cs" />
     <Compile Include="Filters\HttpAuthenticationChallengeContext.cs" />
-    <Compile Include="Hosting\IHostPrincipalService.cs" />
     <Compile Include="Results\BadRequestResult.cs" />
+    <Compile Include="Results\RedirectToRouteResult.cs" />
+    <Compile Include="Results\RedirectResult.cs" />
+    <Compile Include="Results\CreatedAtRouteNegotiatedContentResult.cs" />
+    <Compile Include="Results\BadRequestErrorMessageResult.cs" />
+    <Compile Include="Results\JsonResult.cs" />
+    <Compile Include="Results\ConflictResult.cs" />
+    <Compile Include="Results\UnauthorizedResult.cs" />
+    <Compile Include="Results\ExceptionResult.cs" />
+    <Compile Include="Results\OkResult.cs" />
+    <Compile Include="Results\InternalServerErrorResult.cs" />
+    <Compile Include="Results\NotFoundResult.cs" />
+    <Compile Include="Results\CreatedNegotiatedContentResult.cs" />
+    <Compile Include="Results\OkNegotiatedContentResult.cs" />
     <Compile Include="Results\InvalidModelStateResult.cs" />
     <Compile Include="Results\FormattedContentResult.cs" />
     <Compile Include="Hosting\SuppressHostPrincipalMessageHandler.cs" />
     <Compile Include="Results\NegotiatedContentResult.cs" />
     <Compile Include="Results\StatusCodeResult.cs" />
     <Compile Include="IHttpActionResult.cs" />
-    <Compile Include="Results\ContinuationResult.cs" />
     <Compile Include="HttpErrorKeys.cs" />
-    <Compile Include="HttpVerbAttribute.cs" />
     <Compile Include="Controllers\FilterGrouping.cs" />
     <Compile Include="RoutePrefixAttribute.cs" />
     <Compile Include="Filters\HttpAuthenticationContext.cs" />
     <Compile Include="Results\ResponseMessageResult.cs" />
-    <Compile Include="Hosting\ThreadPrincipalService.cs" />
     <Compile Include="Filters\IAuthenticationFilter.cs" />
     <Compile Include="Filters\IOverrideFilter.cs" />
     <Compile Include="OverrideActionFiltersAttribute.cs" />
     <Compile Include="OverrideAuthenticationAttribute.cs" />
     <Compile Include="OverrideAuthorizationAttribute.cs" />
     <Compile Include="OverrideExceptionFiltersAttribute.cs" />
+    <Compile Include="RouteAttribute.cs" />
+    <Compile Include="Controllers\CandidateAction.cs" />
+    <Compile Include="Routing\HttpSubRouteCollection.cs" />
+    <Compile Include="Routing\RouteCollectionRoute.cs" />
+    <Compile Include="Routing\GenerationRoute.cs" />
     <Compile Include="Routing\HttpRouteDataExtensions.cs" />
+    <Compile Include="Routing\HttpRouteExtensions.cs" />
     <Compile Include="Routing\RouteKeys.cs" />
     <Compile Include="..\Common\Routing\Constraints\AlphaRouteConstraint.cs">
       <Link>Routing\Constraints\AlphaRouteConstraint.cs</Link>
@@ -233,7 +246,6 @@
     <Compile Include="HttpPutAttribute.cs" />
     <Compile Include="HttpDeleteAttribute.cs" />
     <Compile Include="Controllers\IActionHttpMethodProvider.cs" />
-    <Compile Include="Controllers\IActionMethodSelector.cs" />
     <Compile Include="Controllers\ApiControllerActionInvoker.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -429,6 +441,7 @@
     <Compile Include="Validation\Providers\DataMemberModelValidatorProvider.cs" />
     <Compile Include="Validation\Providers\InvalidModelValidatorProvider.cs" />
     <Compile Include="Validation\Providers\RequiredMemberModelValidatorProvider.cs" />
+    <Compile Include="Validation\ReferenceEqualityComparer.cs" />
     <Compile Include="Validation\Validators\ErrorModelValidator.cs" />
     <Compile Include="Validation\Validators\RequiredMemberModelValidator.cs" />
     <Compile Include="Validation\Validators\ValidatableObjectAdapter.cs" />

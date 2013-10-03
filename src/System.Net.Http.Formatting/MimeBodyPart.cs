@@ -5,6 +5,7 @@ using System.Diagnostics.Contracts;
 using System.IO;
 using System.Net.Http.Formatting.Parsers;
 using System.Net.Http.Headers;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
 
@@ -19,6 +20,7 @@ namespace System.Net.Http
         private Stream _outputStream;
         private MultipartStreamProvider _streamProvider;
         private HttpContent _parentContent;
+        private HttpContent _content;
         private HttpContentHeaders _headers;
 
         /// <summary>
@@ -52,18 +54,17 @@ namespace System.Net.Http
         /// <value>
         /// The part's content, or null if the part had no content.
         /// </value>
-        public HttpContent CreateHttpContent()
+        public HttpContent GetCompletedHttpContent()
         {
             Contract.Assert(IsComplete);
 
-            if (_outputStream == null)
+            if (_content == null)
             {
                 return null;
             }
 
-            HttpContent content = new StreamContent(_outputStream);
-            _headers.CopyTo(content.Headers);
-            return content;
+            _headers.CopyTo(_content.Headers);
+            return _content;
         }
 
         /// <summary>
@@ -92,10 +93,11 @@ namespace System.Net.Http
         /// Writes the <paramref name="segment"/> into the part's output stream.
         /// </summary>
         /// <param name="segment">The current segment to be written to the part's output stream.</param>
-        public async Task WriteSegment(ArraySegment<byte> segment)
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        public async Task WriteSegment(ArraySegment<byte> segment, CancellationToken cancellationToken)
         {
             var stream = GetOutputStream();
-            await stream.WriteAsync(segment.Array, segment.Offset, segment.Count);
+            await stream.WriteAsync(segment.Array, segment.Offset, segment.Count, cancellationToken);
         }
 
         /// <summary>
@@ -124,6 +126,7 @@ namespace System.Net.Http
                 {
                     throw Error.InvalidOperation(Properties.Resources.ReadAsMimeMultipartStreamProviderReadOnly, _streamProvider.GetType().Name, _streamType.Name);
                 }
+                _content = new StreamContent(_outputStream);
             }
 
             return _outputStream;
@@ -147,10 +150,25 @@ namespace System.Net.Http
             if (disposing)
             {
                 CleanupOutputStream();
+                CleanupHttpContent();
                 _parentContent = null;
                 HeaderParser = null;
                 Segments.Clear();
             }
+        }
+
+        /// <summary>
+        /// In the success case, the HttpContent is to be used after this Part has been parsed and disposed of.
+        /// Only if Dispose has been called on a non-completed part, the parsed HttpContent needs to be disposed of as well.
+        /// </summary>
+        private void CleanupHttpContent()
+        {
+            if (!IsComplete && _content != null)
+            {
+                _content.Dispose();
+            }
+
+            _content = null;
         }
 
         /// <summary>

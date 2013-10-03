@@ -23,7 +23,10 @@ namespace System.Web.Http.Results
         {
         }
 
-        internal StatusCodeResult(HttpStatusCode statusCode, ApiController controller)
+        /// <summary>Initializes a new instance of the <see cref="StatusCodeResult"/> class.</summary>
+        /// <param name="statusCode">The HTTP status code for the response message.</param>
+        /// <param name="controller">The controller from which to obtain the dependencies needed for execution.</param>
+        public StatusCodeResult(HttpStatusCode statusCode, ApiController controller)
             : this(statusCode, new ApiControllerDependencyProvider(controller))
         {
         }
@@ -49,7 +52,7 @@ namespace System.Web.Http.Results
         }
 
         /// <inheritdoc />
-        public Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
+        public virtual Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(Execute());
         }
@@ -61,22 +64,16 @@ namespace System.Web.Http.Results
 
         internal static HttpResponseMessage Execute(HttpStatusCode statusCode, HttpRequestMessage request)
         {
-            HttpResponseMessage mutableResponse = new HttpResponseMessage(statusCode);
-            HttpResponseMessage response = null;
+            HttpResponseMessage response = new HttpResponseMessage(statusCode);
 
             try
             {
-                mutableResponse.RequestMessage = request;
-
-                response = mutableResponse;
-                mutableResponse = null;
+                response.RequestMessage = request;
             }
-            finally
+            catch
             {
-                if (mutableResponse != null)
-                {
-                    mutableResponse.Dispose();
-                }
+                response.Dispose();
+                throw;
             }
 
             return response;

@@ -67,7 +67,7 @@ namespace System.Web.Http.Cors
             corsHandler.InnerHandler = server;
             HttpMessageInvoker invoker = new HttpMessageInvoker(corsHandler);
             HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Options, "http://localhost/sample");
-            request.Properties[HttpPropertyKeys.HttpConfigurationKey] = config;
+            request.SetConfiguration(config);
             request.Headers.Add(CorsConstants.Origin, "http://localhost");
             request.Headers.Add(CorsConstants.AccessControlRequestMethod, requestedMethod);
             request.Headers.Add(CorsConstants.AccessControlRequestHeaders, requestedHeaders);
@@ -123,6 +123,26 @@ namespace System.Web.Http.Cors
         }
 
         [Fact]
+        public void SendAsync_Preflight_ReturnsSoftNotFound_WhenNoRouteMatches()
+        {
+            HttpConfiguration config = new HttpConfiguration();
+            config.Routes.MapHttpRoute("default", "foo");
+            config.MessageHandlers.Add(new CorsMessageHandler(config));
+            HttpServer server = new HttpServer(config);
+            HttpMessageInvoker invoker = new HttpMessageInvoker(server);
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Options, "http://localhost/nomatch");
+            request.Headers.Add(CorsConstants.Origin, "http://localhost");
+            request.Headers.Add(CorsConstants.AccessControlRequestMethod, "POST");
+
+            HttpResponseMessage response = invoker.SendAsync(request, CancellationToken.None).Result;
+
+            bool noRouteMatched = Assert.IsType<bool>(request.Properties[HttpPropertyKeys.NoRouteMatched]);
+            Assert.True(noRouteMatched);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("{\"Message\":\"No HTTP resource was found that matches the request URI 'http://localhost/nomatch'.\"}", response.Content.ReadAsStringAsync().Result);
+        }
+
+        [Fact]
         public void SendAsync_HandlesExceptions_ThrownDuringPreflight()
         {
             HttpConfiguration config = new HttpConfiguration();
@@ -132,7 +152,7 @@ namespace System.Web.Http.Cors
             corsHandler.InnerHandler = server;
             HttpMessageInvoker invoker = new HttpMessageInvoker(corsHandler);
             HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Options, "http://localhost/sample");
-            request.Properties[HttpPropertyKeys.HttpConfigurationKey] = config;
+            request.SetConfiguration(config);
             request.Headers.Add(CorsConstants.Origin, "http://localhost");
             request.Headers.Add(CorsConstants.AccessControlRequestMethod, "RandomMethod");
 

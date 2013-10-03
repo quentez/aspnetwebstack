@@ -210,9 +210,6 @@
   <data name="CannotAutoCreateMultipleCandidates" xml:space="preserve">
     <value>Cannot automatically bind the navigation property '{0}' on entity type '{1}' for the source entity set '{2}' because there are two or more matching target entity sets. The matching entity sets are: {3}.</value>
   </data>
-  <data name="EntitySetHasNoBuildLinkAnnotation" xml:space="preserve">
-    <value>The entity set '{0}' is missing link generation configuration. Check that the self and edit links are configured during model building.</value>
-  </data>
   <data name="PropertyDoesNotBelongToType" xml:space="preserve">
     <value>The property '{0}' does not belong to the type '{1}'.</value>
   </data>
@@ -439,7 +436,7 @@
     <value>Cannot use Delta of type '{0}' on an entity of type '{1}'.</value>
   </data>
   <data name="DeltaEntityTypeNotAssignable" xml:space="preserve">
-    <value>The entity type '{0}' is not assignable to the Delta type '{1}'.</value>
+    <value>The actual entity type '{0}' is not assignable to the expected type '{1}'.</value>
   </data>
   <data name="EntitySetControllerErrorMessageLanguage" xml:space="preserve">
     <value>en-US</value>
@@ -517,9 +514,6 @@
   <data name="NavigationPropertyMissingDuringSerialization" xml:space="preserve">
     <value>The related navigation property could not be found from the OData path. The related navigation property is required to serialize the payload.</value>
   </data>
-  <data name="UnsupportedPrimitiveType" xml:space="preserve">
-    <value>The type '{0}' is not a supported primitive type.</value>
-  </data>
   <data name="UnableToDetermineMetadataUrl" xml:space="preserve">
     <value>The ODataMediaTypeFormatter must be able to determine the metadata URL for a request in order to serialize the response.</value>
   </data>
@@ -565,9 +559,6 @@
   <data name="UnableToDetermineBaseUrl" xml:space="preserve">
     <value>The ODataMediaTypeFormatter was unable to determine the base URI for the request. The request must be processed by an OData route for the OData formatter to serialize the response.</value>
   </data>
-  <data name="ItemTypeOfCollectionNull" xml:space="preserve">
-    <value>The element type of an EDM collection type cannot be null.</value>
-  </data>
   <data name="CannotWriteType" xml:space="preserve">
     <value>{0} cannot write an object of type '{1}'.</value>
   </data>
@@ -597,9 +588,6 @@
   </data>
   <data name="PropertyNotFound" xml:space="preserve">
     <value>The EDM instance of type '{0}' is missing the property '{1}'.</value>
-  </data>
-  <data name="EdmObjectCannotBeSerialized" xml:space="preserve">
-    <value>{0} does not support serializing an {1} of EDM type '{2}'.</value>
   </data>
   <data name="EdmTypeCannotBeNull" xml:space="preserve">
     <value>The EDM type of the object of type '{0}' is null. The EDM type of an {1} cannot be null.</value>
@@ -636,5 +624,32 @@
   </data>
   <data name="UrlHelperNull" xml:space="preserve">
     <value>The property 'Url' of {0} cannot be null.</value>
+  </data>
+  <data name="EdmComplexObjectNullRef" xml:space="preserve">
+    <value>Cannot get property '{0}' of a null EDM object of type '{1}'.</value>
+  </data>
+  <data name="UnsupportedEdmType" xml:space="preserve">
+    <value>The EDM type '{0}' of kind '{1}' is not supported.</value>
+  </data>
+  <data name="UnexpectedElementType" xml:space="preserve">
+    <value>The element type '{0}' of the given collection type '{1}' is not of the type '{2}'.</value>
+  </data>
+  <data name="ActionNotBoundToEntity" xml:space="preserve">
+    <value>The action '{0}' is not bound to an entity. Only actions that are bound to entities can have action links.</value>
+  </data>
+  <data name="ODataPathInvalid" xml:space="preserve">
+    <value>The OData path is invalid.</value>
+  </data>
+  <data name="TypeMustBeEntity" xml:space="preserve">
+    <value>{0} is not an entity type. Only entity types are supported.</value>
+  </data>
+  <data name="EditLinkNullForLocationHeader" xml:space="preserve">
+    <value>The edit link builder for the entity set '{0}' returned null. An edit link is required for the location header.</value>
+  </data>
+  <data name="ApplyToOnUntypedQueryOption" xml:space="preserve">
+    <value>The query option is not bound to any CLR type. '{0}' is only supported with a query option bound to a CLR type.</value>
+  </data>
+  <data name="ElementClrTypeNull" xml:space="preserve">
+    <value>The property 'ElementClrType' of {0} cannot be null.</value>
   </data>
 </root>

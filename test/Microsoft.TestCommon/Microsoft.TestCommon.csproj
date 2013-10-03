@@ -33,9 +33,7 @@
     <Compile Include="DataAttribute.cs" />
     <Compile Include="EnumHelperTestBase.cs" />
     <Compile Include="InlineDataAttribute.cs" />
-    <Compile Include="InstanceCreator.cs" />
     <Compile Include="MatrixTheoryDataSet.cs" />
-    <Compile Include="PartialTrustRunner.cs" />
     <Compile Include="Platform.cs" />
     <Compile Include="PlatformInfo.cs" />
     <Compile Include="PropertyDataAttribute.cs" />
@@ -89,6 +87,7 @@
     <Compile Include="TheoryDataSet.cs" />
     <Compile Include="ThreadPoolSyncContext.cs" />
     <Compile Include="TraitAttribute.cs" />
+    <Compile Include="VersionTestHelper.cs" />
     <Compile Include="WebUtils.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -70,14 +70,14 @@ namespace System.Web.Http.OData.Query.Expressions
             // Assert
             IEnumerator enumerator = queryable.GetEnumerator();
             Assert.True(enumerator.MoveNext());
-            var partialCustomer = Assert.IsType<SelectExpandWrapper<Customer>>(enumerator.Current);
+            var partialCustomer = Assert.IsAssignableFrom<SelectExpandWrapper<Customer>>(enumerator.Current);
             Assert.False(enumerator.MoveNext());
             Assert.Null(partialCustomer.Instance);
             IEnumerable<SelectExpandWrapper<Order>> innerOrders = partialCustomer.Container.ToDictionary()["Orders"] as IEnumerable<SelectExpandWrapper<Order>>;
             Assert.NotNull(innerOrders);
             SelectExpandWrapper<Order> partialOrder = innerOrders.Single();
             Assert.Same(_queryable.First().Orders.First(), partialOrder.Instance);
-            SelectExpandWrapper<Customer> innerInnerCustomer = Assert.IsType<SelectExpandWrapper<Customer>>(partialOrder.Container.ToDictionary()["Customer"]);
+            SelectExpandWrapper<Customer> innerInnerCustomer = Assert.IsAssignableFrom<SelectExpandWrapper<Customer>>(partialOrder.Container.ToDictionary()["Customer"]);
             Assert.Same(_queryable.First(), innerInnerCustomer.Instance);
         }
 
@@ -159,6 +159,25 @@ namespace System.Web.Http.OData.Query.Expressions
         }
 
         [Fact]
+        public void ProjectAsWrapper_Collection_AppliesPageSize()
+        {
+            // Arrange
+            int pageSize = 5;
+            var orders = Enumerable.Range(0, 10).Select(i => new Order());
+            SelectExpandClause selectExpand = new SelectExpandClause(new SelectItem[0], allSelected: true);
+            Expression source = Expression.Constant(orders);
+            _settings.PageSize = pageSize;
+
+            // Act
+            Expression projection = _binder.ProjectAsWrapper(source, selectExpand, _model.Order);
+
+            // Assert
+            IEnumerable<SelectExpandWrapper<Order>> projectedOrders = Expression.Lambda(projection).Compile().DynamicInvoke() as IEnumerable<SelectExpandWrapper<Order>>;
+            Assert.NotNull(projectedOrders);
+            Assert.Equal(pageSize + 1, projectedOrders.Count());
+        }
+
+        [Fact]
         public void ProjectAsWrapper_ProjectionContainsExpandedProperties()
         {
             // Arrange
@@ -177,6 +196,28 @@ namespace System.Web.Http.OData.Query.Expressions
             SelectExpandWrapper<Order> projectedOrder = Expression.Lambda(projection).Compile().DynamicInvoke() as SelectExpandWrapper<Order>;
             Assert.NotNull(projectedOrder);
             Assert.Contains("Customer", projectedOrder.Container.ToDictionary().Keys);
+        }
+
+        [Fact]
+        public void ProjectAsWrapper_NullExpandedProperty_HasNullValueInProjectedWrapper()
+        {
+            // Arrange
+            Order order = new Order();
+            ExpandedNavigationSelectItem expandItem = new ExpandedNavigationSelectItem(
+                new ODataExpandPath(new NavigationPropertySegment(_model.Order.NavigationProperties().Single(), entitySet: _model.Customers)),
+                _model.Customers,
+                selectExpandOption: null);
+            SelectExpandClause selectExpand = new SelectExpandClause(new SelectItem[] { expandItem }, allSelected: true);
+            Expression source = Expression.Constant(order);
+
+            // Act
+            Expression projection = _binder.ProjectAsWrapper(source, selectExpand, _model.Order);
+
+            // Assert
+            SelectExpandWrapper<Order> projectedOrder = Expression.Lambda(projection).Compile().DynamicInvoke() as SelectExpandWrapper<Order>;
+            Assert.NotNull(projectedOrder);
+            Assert.Contains("Customer", projectedOrder.Container.ToDictionary().Keys);
+            Assert.Null(projectedOrder.Container.ToDictionary()["Customer"]);
         }
 
         [Fact]
@@ -399,6 +440,19 @@ namespace System.Web.Http.OData.Query.Expressions
 
             Assert.Equal(ExpressionType.Conditional, property.NodeType);
             Assert.Equal(String.Format("IIF(({0} == null), null, Convert({0}.ID))", customer.ToString()), property.ToString());
+        }
+
+        [Fact]
+        public void CreatePropertyValueExpression_HandleNullPropagationFalse_ConvertsToNullableType()
+        {
+            _settings.HandleNullPropagation = HandleNullPropagationOption.False;
+            Expression customer = Expression.Constant(new Customer());
+            IEdmProperty idProperty = _model.Customer.StructuralProperties().Single(p => p.Name == "ID");
+
+            Expression property = _binder.CreatePropertyValueExpression(_model.Customer, idProperty, customer);
+
+            Assert.Equal(String.Format("Convert({0}.ID)", customer.ToString()), property.ToString());
+            Assert.Equal(typeof(int?), property.Type);
         }
 
         [Fact]

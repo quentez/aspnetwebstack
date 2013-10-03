@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Collections;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
@@ -69,7 +68,7 @@ namespace System.Web.Http.Validation
                 ActionContext = actionContext,
                 ValidatorCache = actionContext.GetValidatorCache(),
                 ModelState = actionContext.ModelState,
-                Visited = new HashSet<object>(),
+                Visited = new HashSet<object>(ReferenceEqualityComparer.Instance),
                 KeyBuilders = new Stack<IKeyBuilder>(),
                 RootPrefix = keyPrefix
             };
@@ -200,13 +199,6 @@ namespace System.Web.Http.Validation
                         foreach (IKeyBuilder keyBuilder in validationContext.KeyBuilders.Reverse())
                         {
                             modelKey = keyBuilder.AppendTo(modelKey);
-                        }
-
-                        // Avoid adding model errors if the model state already contains model errors for that key
-                        // We can't perform this check earlier because we compute the key string only when we detect an error
-                        if (!validationContext.ModelState.IsValidField(modelKey))
-                        {
-                            return false;
                         }
                     }
                     string errorKey = ModelBindingHelper.CreatePropertyModelName(modelKey, error.MemberName);

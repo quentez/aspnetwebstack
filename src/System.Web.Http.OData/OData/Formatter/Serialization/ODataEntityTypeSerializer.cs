@@ -21,20 +21,14 @@ namespace System.Web.Http.OData.Formatter.Serialization
         private const string Entry = "entry";
 
         /// <inheritdoc />
-        public ODataEntityTypeSerializer(IEdmEntityTypeReference edmType, ODataSerializerProvider serializerProvider)
-            : base(edmType, ODataPayloadKind.Entry, serializerProvider)
+        public ODataEntityTypeSerializer(ODataSerializerProvider serializerProvider)
+            : base(ODataPayloadKind.Entry, serializerProvider)
         {
-            Contract.Assert(edmType != null);
-            EntityType = edmType;
         }
 
-        /// <summary>
-        /// Gets the <see cref="IEdmEntityTypeReference"/> that this serializer handles.
-        /// </summary>
-        public IEdmEntityTypeReference EntityType { get; private set; }
-
         /// <inheritdoc />
-        public override void WriteObject(object graph, ODataMessageWriter messageWriter, ODataSerializerContext writeContext)
+        public override void WriteObject(object graph, Type type, ODataMessageWriter messageWriter,
+            ODataSerializerContext writeContext)
         {
             if (messageWriter == null)
             {
@@ -47,19 +41,18 @@ namespace System.Web.Http.OData.Formatter.Serialization
             }
 
             IEdmEntitySet entitySet = writeContext.EntitySet;
-
             if (entitySet == null)
             {
                 throw new SerializationException(SRResources.EntitySetMissingDuringSerialization);
             }
 
-            IEdmEntityType entityType = EntityType.EntityDefinition();
-            ODataWriter writer = messageWriter.CreateODataEntryWriter(entitySet, entityType);
-            WriteObjectInline(graph, writer, writeContext);
+            ODataWriter writer = messageWriter.CreateODataEntryWriter(entitySet, entitySet.ElementType);
+            WriteObjectInline(graph, entitySet.ElementType.ToEdmTypeReference(isNullable: false), writer, writeContext);
         }
 
         /// <inheritdoc />
-        public override void WriteObjectInline(object graph, ODataWriter writer, ODataSerializerContext writeContext)
+        public override void WriteObjectInline(object graph, IEdmTypeReference expectedType, ODataWriter writer,
+            ODataSerializerContext writeContext)
         {
             if (writer == null)
             {
@@ -85,7 +78,8 @@ namespace System.Web.Http.OData.Formatter.Serialization
         {
             Contract.Assert(writeContext != null);
 
-            EntityInstanceContext entityInstanceContext = new EntityInstanceContext(writeContext, EntityType, graph);
+            IEdmEntityTypeReference entityType = GetEntityType(graph, writeContext);
+            EntityInstanceContext entityInstanceContext = new EntityInstanceContext(writeContext, entityType, graph);
             SelectExpandNode selectExpandNode = CreateSelectExpandNode(entityInstanceContext);
             if (selectExpandNode != null)
             {
@@ -115,7 +109,17 @@ namespace System.Web.Http.OData.Formatter.Serialization
             }
 
             ODataSerializerContext writeContext = entityInstanceContext.SerializerContext;
-            return new SelectExpandNode(writeContext.SelectExpandClause, EntityType, writeContext.Model);
+            IEdmEntityType entityType = entityInstanceContext.EntityType;
+
+            object selectExpandNode;
+            Tuple<SelectExpandClause, IEdmEntityType> key = Tuple.Create(writeContext.SelectExpandClause, entityType);
+            if (!writeContext.Items.TryGetValue(key, out selectExpandNode))
+            {
+                // cache the selectExpandNode so that if we are writing a feed we don't have to construct it again.
+                selectExpandNode = new SelectExpandNode(writeContext.SelectExpandClause, entityType, writeContext.Model);
+                writeContext.Items[key] = selectExpandNode;
+            }
+            return selectExpandNode as SelectExpandNode;
         }
 
         /// <summary>
@@ -135,7 +139,7 @@ namespace System.Web.Http.OData.Formatter.Serialization
                 throw Error.ArgumentNull("entityInstanceContext");
             }
 
-            string typeName = EntityType.FullName();
+            string typeName = entityInstanceContext.EntityType.FullName();
 
             ODataEntry entry = new ODataEntry
             {
@@ -215,8 +219,6 @@ namespace System.Web.Http.OData.Formatter.Serialization
             Contract.Assert(entityInstanceContext != null);
             Contract.Assert(writer != null);
 
-            ODataSerializerContext writeContext = entityInstanceContext.SerializerContext;
-
             IEdmNavigationProperty navigationProperty = navigationPropertyToExpand.Key;
             SelectExpandClause selectExpandClause = navigationPropertyToExpand.Value;
 
@@ -224,20 +226,17 @@ namespace System.Web.Http.OData.Formatter.Serialization
             if (propertyValue != null)
             {
                 // create the serializer context for the expanded item.
-                ODataSerializerContext nestedWriteContext = new ODataSerializerContext(writeContext);
-                nestedWriteContext.SelectExpandClause = selectExpandClause;
-                nestedWriteContext.EntitySet = writeContext.EntitySet.FindNavigationTarget(navigationProperty);
-                nestedWriteContext.IsNested = true;
+                ODataSerializerContext nestedWriteContext = new ODataSerializerContext(entityInstanceContext, selectExpandClause, navigationProperty);
 
                 // write object.
-                Type propertyType = propertyValue.GetType();
-                ODataEdmTypeSerializer serializer = SerializerProvider.GetEdmTypeSerializer(writeContext.Model, propertyValue);
+                ODataEdmTypeSerializer serializer = SerializerProvider.GetEdmTypeSerializer(navigationProperty.Type);
                 if (serializer == null)
                 {
                     throw new SerializationException(
-                        Error.Format(SRResources.TypeCannotBeSerialized, propertyType.FullName, typeof(ODataMediaTypeFormatter).Name));
+                        Error.Format(SRResources.TypeCannotBeSerialized, navigationProperty.Type.ToTraceString(), typeof(ODataMediaTypeFormatter).Name));
                 }
-                serializer.WriteObjectInline(propertyValue, writer, nestedWriteContext);
+
+                serializer.WriteObjectInline(propertyValue, navigationProperty.Type, writer, nestedWriteContext);
             }
         }
 
@@ -345,7 +344,7 @@ namespace System.Web.Http.OData.Formatter.Serialization
             }
 
             object propertyValue = entityInstanceContext.GetPropertyValue(structuralProperty.Name);
-            return serializer.CreateProperty(propertyValue, structuralProperty.Name, writeContext);
+            return serializer.CreateProperty(propertyValue, structuralProperty.Type, structuralProperty.Name, writeContext);
         }
 
         private IEnumerable<ODataAction> CreateODataActions(
@@ -552,6 +551,22 @@ namespace System.Web.Http.OData.Formatter.Serialization
             }
 
             return elementType.FullName();
+        }
+
+        private IEdmEntityTypeReference GetEntityType(object graph, ODataSerializerContext writeContext)
+        {
+            Contract.Assert(graph != null);
+
+            IEdmTypeReference edmType = writeContext.GetEdmType(graph, graph.GetType());
+            Contract.Assert(edmType != null);
+
+            if (!edmType.IsEntity())
+            {
+                throw new SerializationException(
+                    Error.Format(SRResources.CannotWriteType, GetType().Name, edmType.FullName()));
+            }
+
+            return edmType.AsEntity();
         }
     }
 }

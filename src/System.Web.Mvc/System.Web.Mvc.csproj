@@ -7,7 +7,6 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>System.Web.Mvc</RootNamespace>
     <AssemblyName>System.Web.Mvc</AssemblyName>
-    <OutputPath>..\..\bin\$(Configuration)\</OutputPath>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
@@ -45,9 +44,6 @@
     </Compile>
     <Compile Include="..\Common\DictionaryExtensions.cs">
       <Link>Common\DictionaryExtensions.cs</Link>
-    </Compile>
-    <Compile Include="..\Common\EnsureStackHelper.cs">
-      <Link>Common\EnsureStackHelper.cs</Link>
     </Compile>
     <Compile Include="..\Common\ListWrapperCollection.cs">
       <Link>Common\ListWrapperCollection.cs</Link>
@@ -127,6 +123,8 @@
     <Compile Include="..\Common\Routing\HttpRouteParser.cs">
       <Link>Routing\RouteParsing\HttpRouteParser.cs</Link>
     </Compile>
+    <Compile Include="ActionMethodSelectorBase.cs" />
+    <Compile Include="ControllerDescriptorExtensions.cs" />
     <Compile Include="Routing\RouteParsing\ParsedRoute.cs" />
     <Compile Include="..\Common\Routing\PathContentSegment.cs">
       <Link>Routing\RouteParsing\PathContentSegment.cs</Link>
@@ -146,16 +144,12 @@
     <Compile Include="..\Common\Routing\PathSubsegment.cs">
       <Link>Routing\RouteParsing\PathSubsegment.cs</Link>
     </Compile>
-    <Compile Include="..\TransparentCommonAssemblyInfo.cs">
-      <Link>Properties\TransparentCommonAssemblyInfo.cs</Link>
-    </Compile>
     <Compile Include="AdditionalMetaDataAttribute.cs" />
     <Compile Include="AllowAnonymousAttribute.cs" />
     <Compile Include="ActionDescriptorHelper.cs" />
     <Compile Include="Async\BeginInvokeDelegateOfTState.cs" />
     <Compile Include="Async\TaskAsyncActionDescriptor.cs" />
     <Compile Include="Async\TaskWrapperAsyncResult.cs" />
-    <Compile Include="AcceptAttributeAdapter.cs" />
     <Compile Include="Filters\AuthenticationChallengeContext.cs" />
     <Compile Include="Filters\AuthenticationContext.cs" />
     <Compile Include="BuildManagerCompiledView.cs" />
@@ -174,8 +168,7 @@
     <Compile Include="Filters\IAuthenticationFilter.cs" />
     <Compile Include="Filters\IOverrideFilter.cs" />
     <Compile Include="Html5DateRenderingMode.cs" />
-    <Compile Include="HttpVerbAttribute.cs" />
-    <Compile Include="HttpRouteAttribute.cs" />
+    <Compile Include="RouteAttribute.cs" />
     <Compile Include="MembershipPasswordAttributeAdapter.cs" />
     <Compile Include="CompareAttribute.cs" />
     <Compile Include="ChildActionValueProvider.cs" />
@@ -199,8 +192,7 @@
     <Compile Include="RouteAreaAttribute.cs" />
     <Compile Include="Routing\AttributeRoutingMapper.cs" />
     <Compile Include="Routing\DirectRouteExtensions.cs" />
-    <Compile Include="Routing\HttpVerbsRoutingAttribute.cs" />
-    <Compile Include="Routing\IDirectRouteInfoProvider.cs" />
+    <Compile Include="Routing\IRouteInfoProvider.cs" />
     <Compile Include="Routing\RouteBuilder.cs" />
     <Compile Include="Routing\IInlineConstraintResolver.cs" />
     <Compile Include="Routing\RouteCollectionAttributeRoutingExtensions.cs" />
@@ -263,7 +255,6 @@
     <Compile Include="SingleServiceResolver.cs" />
     <Compile Include="Razor\StartPageLookupDelegate.cs" />
     <Compile Include="TagBuilderExtensions.cs" />
-    <Compile Include="ValidationAttributeHelpers.cs" />
     <Compile Include="ViewStartPage.cs" />
     <Compile Include="WebViewPage.cs" />
     <Compile Include="WebViewPageOfTModel.cs" />

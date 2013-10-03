@@ -116,17 +116,6 @@ namespace System.Web.Mvc.Test
         }
 
         [Fact]
-        public void FindActionMethod_NullContext_Throws()
-        {
-            // Arrange
-            Type controllerType = typeof(WithRoutingAttributeController);
-            ActionMethodSelector selector = new ActionMethodSelector(controllerType);
-
-            // Act & Assert
-            Assert.Throws<ArgumentNullException>(() => selector.FindActionMethod(null, "Action"));
-        }
-
-        [Fact]
         public void FindActionMethod_MultipleMethodsSameActionOneWithRouteAttributeAndRouteWasMatched_ReturnsMethodWithRoutingAttribute()
         {
             // Arrange
@@ -342,13 +331,13 @@ namespace System.Web.Mvc.Test
 
         private class WithRoutingAttributeController : Controller
         {
-            [HttpRoute("route")]
+            [Route("route")]
             [ActionName("Action")] // to make things confusing
             public void ActionWithoutRoute()
             {
             }
 
-            [HttpRoute("route")]
+            [Route("route")]
             public void Action()
             {
             }

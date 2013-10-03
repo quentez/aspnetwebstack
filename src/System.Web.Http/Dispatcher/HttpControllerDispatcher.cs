@@ -1,5 +1,6 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.Net;
@@ -88,6 +89,7 @@ namespace System.Web.Http.Dispatcher
 
             IHttpRouteData routeData = request.GetRouteData();
             Contract.Assert(routeData != null);
+
             HttpControllerDescriptor httpControllerDescriptor = ControllerSelector.SelectController(request);
             if (httpControllerDescriptor == null)
             {
@@ -106,24 +108,40 @@ namespace System.Web.Http.Dispatcher
                     SRResources.NoControllerCreated));
             }
 
+            HttpConfiguration controllerConfiguration = httpControllerDescriptor.Configuration;
+
             // Set the controller configuration on the request properties
             HttpConfiguration requestConfig = request.GetConfiguration();
             if (requestConfig == null)
             {
-                request.Properties.Add(HttpPropertyKeys.HttpConfigurationKey, httpControllerDescriptor.Configuration);
+                request.SetConfiguration(controllerConfiguration);
             }
             else
             {
-                if (requestConfig != httpControllerDescriptor.Configuration)
+                if (requestConfig != controllerConfiguration)
                 {
-                    request.Properties[HttpPropertyKeys.HttpConfigurationKey] = httpControllerDescriptor.Configuration;
+                    request.SetConfiguration(controllerConfiguration);
                 }
             }
 
+            HttpRequestContext requestContext = request.GetRequestContext();
+
+            // if the host doesn't create the context we will fallback to creating it.
+            if (requestContext == null)
+            {
+                requestContext = new RequestBackedHttpRequestContext(request)
+                {
+                    // we are caching controller configuration to support per controller configuration.
+                    Configuration = controllerConfiguration,
+                };
+
+                // if the host did not set a request context we will also set it back to the request.
+                request.SetRequestContext(requestContext);
+            }
+
             // Create context
-            HttpControllerContext controllerContext = new HttpControllerContext(httpControllerDescriptor.Configuration, routeData, request);
-            controllerContext.Controller = httpController;
-            controllerContext.ControllerDescriptor = httpControllerDescriptor;
+            HttpControllerContext controllerContext = new HttpControllerContext(requestContext, request,
+                httpControllerDescriptor, httpController);
 
             return httpController.ExecuteAsync(controllerContext, cancellationToken);
         }

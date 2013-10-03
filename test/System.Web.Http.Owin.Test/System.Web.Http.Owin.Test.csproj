@@ -11,17 +11,16 @@
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.Owin, Version=1.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\Microsoft.Owin.1.1.0-beta1-20502-275\lib\net45\Microsoft.Owin.dll</HintPath>
+    <Reference Include="Microsoft.Owin">
+      <HintPath>..\..\packages\Microsoft.Owin.2.0.0-rtw2-20925-642-rel\lib\net45\Microsoft.Owin.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.Owin.Host.HttpListener, Version=0.21.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="Microsoft.Owin.Host.HttpListener, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\Microsoft.Owin.Host.HttpListener.0.21.0-pre\lib\net45\Microsoft.Owin.Host.HttpListener.dll</HintPath>
+      <HintPath>..\..\packages\Microsoft.Owin.Host.HttpListener.2.0.0-rtw2-20925-642-rel\lib\net45\Microsoft.Owin.Host.HttpListener.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.Owin.Hosting, Version=0.21.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="Microsoft.Owin.Hosting, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\Microsoft.Owin.Hosting.0.21.0-pre\lib\net40\Microsoft.Owin.Hosting.dll</HintPath>
+      <HintPath>..\..\packages\Microsoft.Owin.Hosting.2.0.0-rtw2-20925-642-rel\lib\net45\Microsoft.Owin.Hosting.dll</HintPath>
     </Reference>
     <Reference Include="Moq, Version=4.0.10827.0, Culture=neutral, PublicKeyToken=69f491c39445e920, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -46,6 +45,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="OwinHttpRequestContextTests.cs" />
+    <Compile Include="HostAuthenticationAttributeTest.cs" />
     <Compile Include="HostAuthenticationFilterTest.cs" />
     <Compile Include="OwinHttpConfigurationExtensionsTest.cs" />
     <Compile Include="HttpMessageHandlerExtensions.cs" />
@@ -54,7 +55,6 @@
     <Compile Include="WebApiAppBuilderExtensionsTest.cs" />
     <Compile Include="OwinBufferPolicySelectorTest.cs" />
     <Compile Include="HttpMessageHandlerAdapterTest.cs" />
-    <Compile Include="OwinEnvironmentExtensionsTest.cs" />
     <Compile Include="OwinHostIntegrationTest.cs" />
   </ItemGroup>
   <ItemGroup>

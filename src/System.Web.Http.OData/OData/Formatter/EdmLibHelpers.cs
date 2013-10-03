@@ -98,6 +98,14 @@ namespace System.Web.Http.OData.Formatter
                 throw Error.ArgumentNull("clrType");
             }
 
+            return GetEdmType(edmModel, clrType, testCollections: true);
+        }
+
+        private static IEdmType GetEdmType(IEdmModel edmModel, Type clrType, bool testCollections)
+        {
+            Contract.Assert(edmModel != null);
+            Contract.Assert(clrType != null);
+
             IEdmPrimitiveType primitiveType = GetEdmPrimitiveTypeOrNull(clrType);
             if (primitiveType != null)
             {
@@ -105,21 +113,25 @@ namespace System.Web.Http.OData.Formatter
             }
             else
             {
-                Type enumerableOfT = ExtractGenericInterface(clrType, typeof(IEnumerable<>));
-                if (enumerableOfT != null)
+                if (testCollections)
                 {
-                    Type elementClrType = enumerableOfT.GetGenericArguments()[0];
-
-                    // IEnumerable<SelectExpandWrapper<T>> is a collection of T.
-                    if (elementClrType.IsGenericType && elementClrType.GetGenericTypeDefinition() == typeof(SelectExpandWrapper<>))
+                    Type enumerableOfT = ExtractGenericInterface(clrType, typeof(IEnumerable<>));
+                    if (enumerableOfT != null)
                     {
-                        elementClrType = elementClrType.GetGenericArguments()[0];
-                    }
+                        Type elementClrType = enumerableOfT.GetGenericArguments()[0];
 
-                    IEdmTypeReference elementType = GetEdmTypeReference(edmModel, elementClrType);
-                    if (elementType != null)
-                    {
-                        return new EdmCollectionType(elementType);
+                        // IEnumerable<SelectExpandWrapper<T>> is a collection of T.
+                        Type entityType;
+                        if (IsSelectExpandWrapper(elementClrType, out entityType))
+                        {
+                            elementClrType = entityType;
+                        }
+
+                        IEdmType elementType = GetEdmType(edmModel, elementClrType, testCollections: false);
+                        if (elementType != null)
+                        {
+                            return new EdmCollectionType(elementType.ToEdmTypeReference(IsNullable(elementClrType)));
+                        }
                     }
                 }
 
@@ -139,7 +151,7 @@ namespace System.Web.Http.OData.Formatter
                 if (clrType.BaseType != null)
                 {
                     // go up the inheritance tree to see if we have a mapping defined for the base type.
-                    returnType = returnType ?? edmModel.GetEdmType(clrType.BaseType);
+                    returnType = returnType ?? GetEdmType(edmModel, clrType.BaseType, testCollections);
                 }
                 return returnType;
             }
@@ -151,28 +163,35 @@ namespace System.Web.Http.OData.Formatter
             if (edmType != null)
             {
                 bool isNullable = IsNullable(clrType);
-                switch (edmType.TypeKind)
-                {
-                    case EdmTypeKind.Collection:
-                        return new EdmCollectionTypeReference(edmType as IEdmCollectionType, isNullable);
-                    case EdmTypeKind.Complex:
-                        return new EdmComplexTypeReference(edmType as IEdmComplexType, isNullable);
-                    case EdmTypeKind.Entity:
-                        return new EdmEntityTypeReference(edmType as IEdmEntityType, isNullable);
-                    case EdmTypeKind.EntityReference:
-                        return new EdmEntityReferenceTypeReference(edmType as IEdmEntityReferenceType, isNullable);
-                    case EdmTypeKind.Enum:
-                        return new EdmEnumTypeReference(edmType as IEdmEnumType, isNullable);
-                    case EdmTypeKind.Primitive:
-                        return _coreModel.GetPrimitive((edmType as IEdmPrimitiveType).PrimitiveKind, isNullable);
-                    case EdmTypeKind.Row:
-                        return new EdmRowTypeReference(edmType as IEdmRowType, isNullable);
-                    default:
-                        throw Error.NotSupported(SRResources.EdmTypeNotSupported, edmType.ToTraceString());
-                }
+                return ToEdmTypeReference(edmType, isNullable);
             }
 
             return null;
+        }
+
+        public static IEdmTypeReference ToEdmTypeReference(this IEdmType edmType, bool isNullable)
+        {
+            Contract.Assert(edmType != null);
+
+            switch (edmType.TypeKind)
+            {
+                case EdmTypeKind.Collection:
+                    return new EdmCollectionTypeReference(edmType as IEdmCollectionType, isNullable);
+                case EdmTypeKind.Complex:
+                    return new EdmComplexTypeReference(edmType as IEdmComplexType, isNullable);
+                case EdmTypeKind.Entity:
+                    return new EdmEntityTypeReference(edmType as IEdmEntityType, isNullable);
+                case EdmTypeKind.EntityReference:
+                    return new EdmEntityReferenceTypeReference(edmType as IEdmEntityReferenceType, isNullable);
+                case EdmTypeKind.Enum:
+                    return new EdmEnumTypeReference(edmType as IEdmEnumType, isNullable);
+                case EdmTypeKind.Primitive:
+                    return _coreModel.GetPrimitive((edmType as IEdmPrimitiveType).PrimitiveKind, isNullable);
+                case EdmTypeKind.Row:
+                    return new EdmRowTypeReference(edmType as IEdmRowType, isNullable);
+                default:
+                    throw Error.NotSupported(SRResources.EdmTypeNotSupported, edmType.ToTraceString());
+            }
         }
 
         public static IEdmCollectionType GetCollection(this IEdmEntityType entityType)
@@ -392,15 +411,17 @@ namespace System.Web.Http.OData.Formatter
 
         public static Type GetClrType(IEdmType edmType, IEdmModel edmModel, IAssembliesResolver assembliesResolver)
         {
-            Contract.Assert(edmType is IEdmSchemaType);
+            IEdmSchemaType edmSchemaType = edmType as IEdmSchemaType;
 
-            ClrTypeAnnotation annotation = edmModel.GetAnnotationValue<ClrTypeAnnotation>(edmType);
+            Contract.Assert(edmSchemaType != null);
+
+            ClrTypeAnnotation annotation = edmModel.GetAnnotationValue<ClrTypeAnnotation>(edmSchemaType);
             if (annotation != null)
             {
                 return annotation.ClrType;
             }
 
-            string typeName = (edmType as IEdmSchemaType).FullName();
+            string typeName = edmSchemaType.FullName();
             IEnumerable<Type> matchingTypes = GetMatchingTypes(typeName, assembliesResolver);
 
             if (matchingTypes.Count() > 1)
@@ -409,7 +430,7 @@ namespace System.Web.Http.OData.Formatter
                     typeName, String.Join(",", matchingTypes.Select(type => type.AssemblyQualifiedName)));
             }
 
-            edmModel.SetAnnotationValue<ClrTypeAnnotation>(edmType, new ClrTypeAnnotation(matchingTypes.SingleOrDefault()));
+            edmModel.SetAnnotationValue<ClrTypeAnnotation>(edmSchemaType, new ClrTypeAnnotation(matchingTypes.SingleOrDefault()));
 
             return matchingTypes.SingleOrDefault();
         }
@@ -471,6 +492,23 @@ namespace System.Web.Http.OData.Formatter
         public static bool IsNullable(Type type)
         {
             return !type.IsValueType || Nullable.GetUnderlyingType(type) != null;
+        }
+
+        private static bool IsSelectExpandWrapper(Type type, out Type entityType)
+        {
+            if (type == null)
+            {
+                entityType = null;
+                return false;
+            }
+
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(SelectExpandWrapper<>))
+            {
+                entityType = type.GetGenericArguments()[0];
+                return true;
+            }
+
+            return IsSelectExpandWrapper(type.BaseType, out entityType);
         }
 
         private static Type ExtractGenericInterface(Type queryType, Type interfaceType)

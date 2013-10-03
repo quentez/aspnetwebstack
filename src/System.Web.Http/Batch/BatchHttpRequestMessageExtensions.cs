@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Net.Http;
+using System.Web.Http.Controllers;
 using System.Web.Http.Hosting;
 
 namespace System.Web.Http.Batch
@@ -14,13 +15,15 @@ namespace System.Web.Http.Batch
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static class BatchHttpRequestMessageExtensions
     {
+        private const string HttpBatchContextKey = "MS_HttpBatchContext";
+
         private static readonly string[] BatchRequestPropertyExclusions =
         {
             HttpPropertyKeys.HttpRouteDataKey,
             HttpPropertyKeys.DisposableRequestResourcesKey,
-            HttpPropertyKeys.UrlHelperKey,
             HttpPropertyKeys.SynchronizationContextKey,
-            HttpPropertyKeys.HttpConfigurationKey
+            HttpPropertyKeys.HttpConfigurationKey,
+            HttpBatchContextKey
         };
 
         /// <summary>
@@ -45,6 +48,13 @@ namespace System.Web.Http.Batch
                 {
                     subRequest.Properties.Add(property);
                 }
+            }
+
+            HttpRequestContext originalContext = subRequest.GetRequestContext();
+
+            if (originalContext != null)
+            {
+                subRequest.SetRequestContext(new BatchHttpRequestContext(originalContext));
             }
         }
     }

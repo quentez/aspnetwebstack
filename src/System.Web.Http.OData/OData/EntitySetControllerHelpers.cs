@@ -8,6 +8,7 @@ using System.Net.Http;
 using System.Web.Http.OData.Properties;
 using System.Web.Http.OData.Query;
 using System.Web.Http.OData.Routing;
+using System.Web.Http.Routing;
 using Microsoft.Data.OData;
 using Microsoft.Data.OData.Query;
 
@@ -88,7 +89,8 @@ namespace System.Web.Http.OData
                 throw Error.InvalidOperation(SRResources.LocationHeaderDoesNotStartWithEntitySet);
             }
 
-            response.Headers.Location = new Uri(controller.Url.ODataLink(
+            UrlHelper urlHelper = controller.Url ?? new UrlHelper(request);
+            response.Headers.Location = new Uri(urlHelper.ODataLink(
                                                     entitySetSegment,
                                                     new KeyValuePathSegment(ODataUriUtils.ConvertToUriLiteral(entityKey, ODataVersion.V3))));
             return response;
@@ -253,7 +255,7 @@ namespace System.Web.Http.OData
         /// Returns whether or not the request prefers content to be returned.
         /// </summary>
         /// <returns><c>true</c> if the request has a Prefer header value for "return-content", <c>false</c> otherwise</returns>
-        private static bool RequestPrefersReturnContent(HttpRequestMessage request)
+        internal static bool RequestPrefersReturnContent(HttpRequestMessage request)
         {
             IEnumerable<string> preferences = null;
             if (request.Headers.TryGetValues(PreferHeaderName, out preferences))
@@ -267,7 +269,7 @@ namespace System.Web.Http.OData
         /// Returns whether or not the request prefers no content to be returned.
         /// </summary>
         /// <returns><c>true</c> if the request has a Prefer header value for "return-no-content", <c>false</c> otherwise</returns>
-        private static bool RequestPrefersReturnNoContent(HttpRequestMessage request)
+        internal static bool RequestPrefersReturnNoContent(HttpRequestMessage request)
         {
             IEnumerable<string> preferences = null;
             if (request.Headers.TryGetValues(PreferHeaderName, out preferences))

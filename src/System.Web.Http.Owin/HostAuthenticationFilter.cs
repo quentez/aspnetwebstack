@@ -7,7 +7,6 @@ using System.Security.Claims;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Web.Http.Controllers;
 using System.Web.Http.Filters;
 using System.Web.Http.Owin.Properties;
 using Microsoft.Owin;
@@ -53,14 +52,19 @@ namespace System.Web.Http
                 throw new InvalidOperationException(OwinResources.HttpAuthenticationContext_RequestMustNotBeNull);
             }
 
-            OwinRequest owinRequest = request.GetOwinRequest();
+            IAuthenticationManager authenticationManager = GetAuthenticationManagerOrThrow(request);
 
             cancellationToken.ThrowIfCancellationRequested();
-            IIdentity identity = await owinRequest.AuthenticateAsync(_authenticationType);
+            AuthenticateResult result = await authenticationManager.AuthenticateAsync(_authenticationType);
 
-            if (identity != null)
+            if (result != null)
             {
-                context.Principal = new ClaimsPrincipal(identity);
+                IIdentity identity = result.Identity;
+
+                if (identity != null)
+                {
+                    context.Principal = new ClaimsPrincipal(identity);
+                }
             }
         }
 
@@ -76,14 +80,14 @@ namespace System.Web.Http
 
             if (request == null)
             {
-                throw new InvalidOperationException(OwinResources.HttpAuthenticationContext_RequestMustNotBeNull);
+                throw new InvalidOperationException(OwinResources.HttpAuthenticationChallengeContext_RequestMustNotBeNull);
             }
 
-            OwinResponse response = request.GetOwinResponse();
+            IAuthenticationManager authenticationManager = GetAuthenticationManagerOrThrow(request);
 
             // Control the challenges that OWIN middleware adds later.
-            response.AuthenticationResponseChallenge = AddChallengeAuthenticationType(
-                response.AuthenticationResponseChallenge, _authenticationType);
+            authenticationManager.AuthenticationResponseChallenge = AddChallengeAuthenticationType(
+                authenticationManager.AuthenticationResponseChallenge, _authenticationType);
 
             return TaskHelpers.Completed();
         }
@@ -100,7 +104,7 @@ namespace System.Web.Http
             Contract.Assert(authenticationType != null);
 
             List<string> authenticationTypes = new List<string>();
-            AuthenticationExtra extra;
+            AuthenticationProperties properties;
 
             if (challenge != null)
             {
@@ -111,16 +115,30 @@ namespace System.Web.Http
                     authenticationTypes.AddRange(currentAuthenticationTypes);
                 }
 
-                extra = challenge.Extra;
+                properties = challenge.Properties;
             }
             else
             {
-                extra = new AuthenticationExtra();
+                properties = new AuthenticationProperties();
             }
 
             authenticationTypes.Add(authenticationType);
 
-            return new AuthenticationResponseChallenge(authenticationTypes.ToArray(), extra);
+            return new AuthenticationResponseChallenge(authenticationTypes.ToArray(), properties);
+        }
+
+        private static IAuthenticationManager GetAuthenticationManagerOrThrow(HttpRequestMessage request)
+        {
+            Contract.Assert(request != null);
+
+            IAuthenticationManager authenticationManager = request.GetAuthenticationManager();
+
+            if (authenticationManager == null)
+            {
+                throw new InvalidOperationException(OwinResources.IAuthenticationManagerNotAvailable);
+            }
+
+            return authenticationManager;
         }
     }
 }

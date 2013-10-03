@@ -110,10 +110,10 @@ namespace System.Web.Http.OData.Formatter
             return new ODataMessageReader(requestMessage);
         }
 
-        public static ODataSerializerProvider GetMockODataSerializerProvider(ODataSerializer serializer)
+        public static ODataSerializerProvider GetMockODataSerializerProvider(ODataEdmTypeSerializer serializer)
         {
             Mock<ODataSerializerProvider> serializerProvider = new Mock<ODataSerializerProvider>();
-            serializerProvider.Setup(sp => sp.GetODataPayloadSerializer(It.IsAny<IEdmModel>(), It.IsAny<Type>())).Returns(serializer);
+            serializerProvider.Setup(sp => sp.GetEdmTypeSerializer(It.IsAny<IEdmTypeReference>())).Returns(serializer);
             return serializerProvider.Object;
         }
     }

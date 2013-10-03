@@ -6,7 +6,6 @@
     <OutputType>Library</OutputType>
     <RootNamespace>WebMatrix.Data</RootNamespace>
     <AssemblyName>WebMatrix.Data</AssemblyName>
-    <OutputPath>..\..\bin\$(Configuration)\</OutputPath>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
@@ -33,9 +32,6 @@
     </Compile>
     <Compile Include="..\GlobalSuppressions.cs">
       <Link>Common\GlobalSuppressions.cs</Link>
-    </Compile>
-    <Compile Include="..\TransparentCommonAssemblyInfo.cs">
-      <Link>Properties\TransparentCommonAssemblyInfo.cs</Link>
     </Compile>
     <Compile Include="ConfigurationManagerWrapper.cs" />
     <Compile Include="ConnectionConfiguration.cs" />

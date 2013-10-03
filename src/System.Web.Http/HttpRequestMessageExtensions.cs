@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net.Http.Formatting;
@@ -37,6 +38,18 @@ namespace System.Net.Http
                 throw Error.ArgumentNull("request");
             }
 
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
+            {
+                return requestContext.Configuration;
+            }
+
+            return request.LegacyGetConfiguration();
+        }
+
+        internal static HttpConfiguration LegacyGetConfiguration(this HttpRequestMessage request)
+        {
             return request.GetProperty<HttpConfiguration>(HttpPropertyKeys.HttpConfigurationKey);
         }
 
@@ -54,6 +67,13 @@ namespace System.Net.Http
             if (configuration == null)
             {
                 throw Error.ArgumentNull("configuration");
+            }
+
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
+            {
+                requestContext.Configuration = configuration;
             }
 
             request.Properties[HttpPropertyKeys.HttpConfigurationKey] = configuration;
@@ -89,6 +109,37 @@ namespace System.Net.Http
             return result;
         }
 
+        /// <summary>Gets the <see cref="HttpRequestContext"/> associated with this request.</summary>
+        /// <param name="request">The HTTP request.</param>
+        /// <returns>The <see cref="HttpRequestContext"/> associated with this request.</returns>
+        public static HttpRequestContext GetRequestContext(this HttpRequestMessage request)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            return request.GetProperty<HttpRequestContext>(HttpPropertyKeys.RequestContextKey);
+        }
+
+        /// <summary>Gets an <see cref="HttpRequestContext"/> associated with this request.</summary>
+        /// <param name="request">The HTTP request.</param>
+        /// <param name="context">The <see cref="HttpRequestContext"/> to associate with this request.</param>
+        public static void SetRequestContext(this HttpRequestMessage request, HttpRequestContext context)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            if (context == null)
+            {
+                throw Error.ArgumentNull("context");
+            }
+
+            request.Properties[HttpPropertyKeys.RequestContextKey] = context;
+        }
+
         /// <summary>
         /// Gets the <see cref="System.Threading.SynchronizationContext"/> for the given request or null if not available.
         /// </summary>
@@ -104,6 +155,16 @@ namespace System.Net.Http
             return request.GetProperty<SynchronizationContext>(HttpPropertyKeys.SynchronizationContextKey);
         }
 
+        internal static void SetSynchronizationContext(this HttpRequestMessage request, SynchronizationContext synchronizationContext)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            request.Properties[HttpPropertyKeys.SynchronizationContextKey] = synchronizationContext;
+        }
+
         /// <summary>
         /// Gets the current <see cref="T:System.Security.Cryptography.X509Certificates.X509Certificate2"/> or null if not available.
         /// </summary>
@@ -116,6 +177,18 @@ namespace System.Net.Http
                 throw Error.ArgumentNull("request");
             }
 
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
+            {
+                return requestContext.ClientCertificate;
+            }
+
+            return request.LegacyGetClientCertificate();
+        }
+
+        internal static X509Certificate2 LegacyGetClientCertificate(this HttpRequestMessage request)
+        {
             X509Certificate2 result = null;
 
             if (!request.Properties.TryGetValue(HttpPropertyKeys.ClientCertificateKey, out result))
@@ -149,6 +222,18 @@ namespace System.Net.Http
                 throw Error.ArgumentNull("request");
             }
 
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
+            {
+                return requestContext.RouteData;
+            }
+
+            return request.LegacyGetRouteData();
+        }
+
+        internal static IHttpRouteData LegacyGetRouteData(this HttpRequestMessage request)
+        {
             return request.GetProperty<IHttpRouteData>(HttpPropertyKeys.HttpRouteDataKey);
         }
 
@@ -163,9 +248,17 @@ namespace System.Net.Http
             {
                 throw Error.ArgumentNull("request");
             }
+
             if (routeData == null)
             {
                 throw Error.ArgumentNull("routeData");
+            }
+
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
+            {
+                requestContext.RouteData = routeData;
             }
 
             request.Properties[HttpPropertyKeys.HttpRouteDataKey] = routeData;
@@ -184,6 +277,16 @@ namespace System.Net.Http
             }
 
             return request.GetProperty<HttpActionDescriptor>(HttpPropertyKeys.HttpActionDescriptorKey);
+        }
+
+        internal static void SetActionDescriptor(this HttpRequestMessage request, HttpActionDescriptor actionDescriptor)
+        {
+            if (request == null)
+            {
+                throw Error.ArgumentNull("request");
+            }
+
+            request.Properties[HttpPropertyKeys.HttpActionDescriptorKey] = actionDescriptor;
         }
 
         private static T GetProperty<T>(this HttpRequestMessage request, string key)
@@ -662,7 +765,13 @@ namespace System.Net.Http
             Guid correlationId;
             if (!request.Properties.TryGetValue<Guid>(HttpPropertyKeys.RequestCorrelationKey, out correlationId))
             {
-                correlationId = Guid.NewGuid();
+                // Check if the Correlation Manager ID is set; otherwise fallback to creating a new GUID
+                correlationId = Trace.CorrelationManager.ActivityId;
+                if (correlationId == Guid.Empty)
+                {
+                    correlationId = Guid.NewGuid();
+                }
+
                 request.Properties.Add(HttpPropertyKeys.RequestCorrelationKey, correlationId);
             }
 
@@ -714,69 +823,14 @@ namespace System.Net.Http
                 throw Error.ArgumentNull("request");
             }
 
-            UrlHelper urlHelper;
-            if (!request.Properties.TryGetValue<UrlHelper>(HttpPropertyKeys.UrlHelperKey, out urlHelper))
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
             {
-                urlHelper = new UrlHelper(request);
-                request.Properties.Add(HttpPropertyKeys.UrlHelperKey, urlHelper);
+                return requestContext.Url;
             }
 
-            return urlHelper;
-        }
-
-        /// <summary>
-        /// Sets the <see cref="UrlHelper"/> instance associated with this request.
-        /// </summary>
-        /// <param name="request">The <see cref="HttpRequestMessage"/>.</param>
-        /// <param name="urlHelper">The <see cref="UrlHelper"/></param>
-        /// <returns>The <see cref="UrlHelper"/> instance associated with this request.</returns>
-        public static void SetUrlHelper(this HttpRequestMessage request, UrlHelper urlHelper)
-        {
-            if (request == null)
-            {
-                throw Error.ArgumentNull("request");
-            }
-            if (urlHelper == null)
-            {
-                throw Error.ArgumentNull("urlHelper");
-            }
-
-            request.Properties[HttpPropertyKeys.UrlHelperKey] = urlHelper;
-        }
-
-        /// <summary>
-        /// Retrieves the root virtual path associated with this request.
-        /// </summary>
-        /// <param name="request">The <see cref="HttpRequestMessage"/>.</param>
-        /// <returns>The root virtual path associated with this request.</returns>
-        public static string GetVirtualPathRoot(this HttpRequestMessage request)
-        {
-            if (request == null)
-            {
-                throw Error.ArgumentNull("request");
-            }
-
-            return request.GetProperty<string>(HttpPropertyKeys.VirtualPathRoot);
-        }
-
-        /// <summary>
-        /// Sets the root virtual path associated with this request.
-        /// </summary>
-        /// <param name="request">The <see cref="HttpRequestMessage"/>.</param>
-        /// <param name="virtualPathRoot">The virtual path root to associate with this request.</param>
-        public static void SetVirtualPathRoot(this HttpRequestMessage request, string virtualPathRoot)
-        {
-            if (request == null)
-            {
-                throw Error.ArgumentNull("request");
-            }
-
-            if (virtualPathRoot == null)
-            {
-                throw Error.ArgumentNull("virtualPathRoot");
-            }
-
-            request.Properties[HttpPropertyKeys.VirtualPathRoot] = virtualPathRoot;
+            return new UrlHelper(request);
         }
 
         /// <summary>
@@ -791,6 +845,18 @@ namespace System.Net.Http
                 throw Error.ArgumentNull("request");
             }
 
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
+            {
+                return requestContext.IsLocal;
+            }
+
+            return request.LegacyIsLocal();
+        }
+
+        internal static bool LegacyIsLocal(this HttpRequestMessage request)
+        {
             Lazy<bool> isLocal = request.GetProperty<Lazy<bool>>(HttpPropertyKeys.IsLocalKey);
 
             return isLocal == null ? false : isLocal.Value;
@@ -823,6 +889,18 @@ namespace System.Net.Http
                 throw Error.ArgumentNull("request");
             }
 
+            HttpRequestContext requestContext = GetRequestContext(request);
+
+            if (requestContext != null)
+            {
+                return requestContext.IncludeErrorDetail;
+            }
+
+            return request.LegacyShouldIncludeErrorDetail();
+        }
+
+        internal static bool LegacyShouldIncludeErrorDetail(this HttpRequestMessage request)
+        {
             HttpConfiguration configuration = request.GetConfiguration();
             IncludeErrorDetailPolicy includeErrorDetailPolicy = IncludeErrorDetailPolicy.Default;
             if (configuration != null)
@@ -867,43 +945,6 @@ namespace System.Net.Http
             }
 
             return GetRegisteredResourcesForDispose(request);
-        }
-
-        /// <summary>
-        /// Gets the response message of the <see cref="HttpResponseException"/> thrown by a custom route implementation.
-        /// </summary>
-        /// <remarks>Custom <see cref="IHttpRoute"/> implementations can throw <see cref="HttpResponseException"/> to indicate that the incoming request matches
-        /// the route but is a bad request (HTTP 400 status code).</remarks>
-        /// <param name="request">The incoming request message.</param>
-        public static HttpResponseMessage GetRoutingErrorResponse(this HttpRequestMessage request)
-        {
-            if (request == null)
-            {
-                throw Error.ArgumentNull("request");
-            }
-
-            return request.GetProperty<HttpResponseMessage>(HttpPropertyKeys.RoutingErrorResponseKey);
-        }
-
-        /// <summary>
-        /// Sets the response message of the <see cref="HttpResponseException"/> thrown by a custom route implementation.
-        /// </summary>
-        /// <remarks>Custom <see cref="IHttpRoute"/> implementations can throw <see cref="HttpResponseException"/> to indicate that the incoming request matches
-        /// the route but is a bad request (HTTP 400 status code).</remarks>
-        /// <param name="request">The incoming request message.</param>
-        /// <param name="errorResponse">The error response to be returned.</param>
-        public static void SetRoutingErrorResponse(this HttpRequestMessage request, HttpResponseMessage errorResponse)
-        {
-            if (request == null)
-            {
-                throw Error.ArgumentNull("request");
-            }
-            if (errorResponse == null)
-            {
-                throw Error.ArgumentNull("errorResponse");
-            }
-
-            request.Properties[HttpPropertyKeys.RoutingErrorResponseKey] = errorResponse;
         }
 
         private static List<IDisposable> GetRegisteredResourcesForDispose(HttpRequestMessage request)

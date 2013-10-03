@@ -7,7 +7,6 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Microsoft.Web.Helpers</RootNamespace>
     <AssemblyName>Microsoft.Web.Helpers</AssemblyName>
-    <OutputPath>..\..\bin\$(Configuration)\</OutputPath>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\WebHelpers.ruleset</CodeAnalysisRuleSet>
@@ -33,9 +32,6 @@
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>CommonResources.resx</DependentUpon>
-    </Compile>
-    <Compile Include="..\TransparentCommonAssemblyInfo.cs">
-      <Link>Properties\TransparentCommonAssemblyInfo.cs</Link>
     </Compile>
     <Compile Include="Analytics.generated.cs">
       <AutoGen>True</AutoGen>
@@ -94,11 +90,6 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="ThemesImplementation.cs" />
-    <Compile Include="Twitter.generated.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Twitter.cshtml</DependentUpon>
-    </Compile>
     <Compile Include="Video.cs" />
     <Compile Include="VirtualPathUtilityBase.cs" />
     <Compile Include="VirtualPathUtilityWrapper.cs" />
@@ -175,11 +166,6 @@
       <CustomToolNamespace>Microsoft.Web.Helpers</CustomToolNamespace>
       <Generator>RazorGenerator</Generator>
       <LastGenOutput>ReCaptcha.generated.cs</LastGenOutput>
-    </None>
-    <None Include="Twitter.cshtml">
-      <CustomToolNamespace>Microsoft.Web.Helpers</CustomToolNamespace>
-      <Generator>RazorGenerator</Generator>
-      <LastGenOutput>Twitter.generated.cs</LastGenOutput>
     </None>
   </ItemGroup>
   <ItemGroup>

@@ -358,11 +358,14 @@ namespace System.Web.Http.OData.Formatter
                     XElement xml = XElement.Load(response.Content.ReadAsStreamAsync().Result);
 
                     Assert.Equal("error", xml.Name.LocalName);
-                    Assert.Equal("The query specified in the URI is not valid.", xml.Element(XName.Get("{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}message")).Value);
+                    Assert.Equal("The query specified in the URI is not valid.",
+                        xml.Element(XName.Get("{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}message")).Value);
                     XElement innerErrorXml = xml.Element(XName.Get("{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}innererror"));
                     Assert.NotNull(innerErrorXml);
-                    Assert.Equal("Type 'System.Web.Http.OData.Formatter.FormatterPerson' does not have a property 'abc'.", innerErrorXml.Element(XName.Get("{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}message")).Value);
-                    Assert.Equal("Microsoft.Data.OData.ODataException", innerErrorXml.Element(XName.Get("{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}type")).Value);
+                    Assert.Equal("Could not find a property named 'abc' on type 'System.Web.Http.OData.Formatter.FormatterPerson'.",
+                        innerErrorXml.Element(XName.Get("{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}message")).Value);
+                    Assert.Equal("Microsoft.Data.OData.ODataException",
+                        innerErrorXml.Element(XName.Get("{http://schemas.microsoft.com/ado/2007/08/dataservices/metadata}type")).Value);
                 }
             }
         }
@@ -522,14 +525,15 @@ namespace System.Web.Http.OData.Formatter
 
         private class CustomFeedSerializer : ODataFeedSerializer
         {
-            public CustomFeedSerializer(IEdmCollectionTypeReference edmType, ODataSerializerProvider serializerProvider)
-                : base(edmType, serializerProvider)
+            public CustomFeedSerializer(ODataSerializerProvider serializerProvider)
+                : base(serializerProvider)
             {
             }
 
-            public override ODataFeed CreateODataFeed(IEnumerable feedInstance, ODataSerializerContext writeContext)
+            public override ODataFeed CreateODataFeed(IEnumerable feedInstance, IEdmCollectionTypeReference feedType,
+                ODataSerializerContext writeContext)
             {
-                ODataFeed feed = base.CreateODataFeed(feedInstance, writeContext);
+                ODataFeed feed = base.CreateODataFeed(feedInstance, feedType, writeContext);
                 feed.Atom().Title = new AtomTextConstruct { Kind = AtomTextConstructKind.Text, Text = "My amazing feed" };
                 return feed;
             }
@@ -537,14 +541,14 @@ namespace System.Web.Http.OData.Formatter
 
         private class CustomSerializerProvider : DefaultODataSerializerProvider
         {
-            public override ODataEdmTypeSerializer CreateEdmTypeSerializer(IEdmTypeReference edmType)
+            public override ODataEdmTypeSerializer GetEdmTypeSerializer(IEdmTypeReference edmType)
             {
                 if (edmType.IsCollection() && edmType.AsCollection().ElementType().IsEntity())
                 {
-                    return new CustomFeedSerializer(edmType.AsCollection(), this);
+                    return new CustomFeedSerializer(this);
                 }
 
-                return base.CreateEdmTypeSerializer(edmType);
+                return base.GetEdmTypeSerializer(edmType);
             }
         }
     }

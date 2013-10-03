@@ -1,9 +1,9 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Diagnostics.Contracts;
+using System.Runtime.CompilerServices;
 using System.Web.Http.OData.Properties;
 using Microsoft.Data.Edm;
-using Microsoft.Data.Edm.Library;
 using Microsoft.Data.OData;
 
 namespace System.Web.Http.OData.Formatter.Deserialization
@@ -16,21 +16,14 @@ namespace System.Web.Http.OData.Formatter.Deserialization
         /// <summary>
         /// Initializes a new instance of the <see cref="ODataComplexTypeDeserializer"/> class.
         /// </summary>
-        /// <param name="edmType">The complex type that this deserializer can read. </param>
         /// <param name="deserializerProvider">The deserializer provider to use to read inner objects.</param>
-        public ODataComplexTypeDeserializer(IEdmComplexTypeReference edmType, ODataDeserializerProvider deserializerProvider)
-            : base(edmType, ODataPayloadKind.Property, deserializerProvider)
+        public ODataComplexTypeDeserializer(ODataDeserializerProvider deserializerProvider)
+            : base(ODataPayloadKind.Property, deserializerProvider)
         {
-            ComplexType = edmType;
         }
 
-        /// <summary>
-        /// Gets the <see cref="IEdmComplexTypeReference"/> this deserializer can read.
-        /// </summary>
-        public IEdmComplexTypeReference ComplexType { get; private set; }
-
         /// <inheritdoc />
-        public sealed override object ReadInline(object item, ODataDeserializerContext readContext)
+        public sealed override object ReadInline(object item, IEdmTypeReference edmType, ODataDeserializerContext readContext)
         {
             if (readContext == null)
             {
@@ -43,25 +36,31 @@ namespace System.Web.Http.OData.Formatter.Deserialization
             }
 
             ODataComplexValue complexValue = item as ODataComplexValue;
-
             if (complexValue == null)
             {
                 throw Error.Argument("item", SRResources.ArgumentMustBeOfType, typeof(ODataComplexValue).Name);
             }
 
-            // Recursion guard to avoid stack overflows
-            EnsureStackHelper.EnsureStack();
+            if (!edmType.IsComplex())
+            {
+                throw Error.Argument("edmType", SRResources.ArgumentMustBeOfType, EdmTypeKind.Complex);
+            }
 
-            return ReadComplexValue(complexValue, readContext);
+            // Recursion guard to avoid stack overflows
+            RuntimeHelpers.EnsureSufficientExecutionStack();
+
+            return ReadComplexValue(complexValue, edmType.AsComplex(), readContext);
         }
 
         /// <summary>
         /// Deserializes the given <paramref name="complexValue"/> under the given <paramref name="readContext"/>.
         /// </summary>
         /// <param name="complexValue">The complex value to deserialize.</param>
+        /// <param name="complexType">The EDM type of the complex value to read.</param>
         /// <param name="readContext">The deserializer context.</param>
         /// <returns>The deserialized complex value.</returns>
-        public virtual object ReadComplexValue(ODataComplexValue complexValue, ODataDeserializerContext readContext)
+        public virtual object ReadComplexValue(ODataComplexValue complexValue, IEdmComplexTypeReference complexType,
+            ODataDeserializerContext readContext)
         {
             if (complexValue == null)
             {
@@ -78,26 +77,32 @@ namespace System.Web.Http.OData.Formatter.Deserialization
                 throw Error.Argument("readContext", SRResources.ModelMissingFromReadContext);
             }
 
-            object complexResource = CreateResource(ComplexType.ComplexDefinition(), readContext.Model);
+            object complexResource = CreateResource(complexType, readContext);
             foreach (ODataProperty complexProperty in complexValue.Properties)
             {
-                DeserializationHelpers.ApplyProperty(complexProperty, ComplexType, complexResource, DeserializerProvider, readContext);
+                DeserializationHelpers.ApplyProperty(complexProperty, complexType, complexResource, DeserializerProvider, readContext);
             }
             return complexResource;
         }
 
-        internal static object CreateResource(IEdmComplexType edmComplexType, IEdmModel edmModel)
+        internal static object CreateResource(IEdmComplexTypeReference edmComplexType, ODataDeserializerContext readContext)
         {
             Contract.Assert(edmComplexType != null);
-            Contract.Assert(edmModel != null);
 
-            Type clrType = EdmLibHelpers.GetClrType(new EdmComplexTypeReference(edmComplexType, isNullable: true), edmModel);
-            if (clrType == null)
+            if (readContext.IsUntyped)
             {
-                throw Error.InvalidOperation(SRResources.MappingDoesNotContainEntityType, edmComplexType.FullName());
+                return new EdmComplexObject(edmComplexType);
             }
+            else
+            {
+                Type clrType = EdmLibHelpers.GetClrType(edmComplexType, readContext.Model);
+                if (clrType == null)
+                {
+                    throw Error.InvalidOperation(SRResources.MappingDoesNotContainEntityType, edmComplexType.FullName());
+                }
 
-            return Activator.CreateInstance(clrType);
+                return Activator.CreateInstance(clrType);
+            }
         }
     }
 }

@@ -1,18 +1,17 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Configuration;
+using System.Web.Http.Controllers;
 using System.Web.Http.Hosting;
 using System.Web.Http.Routing;
 using System.Web.Http.WebHost.Properties;
@@ -93,9 +92,9 @@ namespace System.Web.Http.WebHost
             HttpRequestMessage request = contextBase.GetHttpRequestMessage() ?? ConvertRequest(contextBase);
 
             // Add route data
-            request.Properties[HttpPropertyKeys.HttpRouteDataKey] = _routeData;
+            request.SetRouteData(_routeData);
 
-            HttpResponseMessage response = await _server.SendAsync(request, contextBase.Request.TimedOutToken);
+            HttpResponseMessage response = await _server.SendAsync(request, CancellationToken.None);
             await ConvertResponse(contextBase, response, request);
         }
 
@@ -127,7 +126,7 @@ namespace System.Web.Http.WebHost
         }
 
         /// <summary>
-        /// Converts a <see cref="HttpResponseMessage"/> to an <see cref="HttpResponseBase"/> and disposes the 
+        /// Converts a <see cref="HttpResponseMessage"/> to an <see cref="HttpResponseBase"/> and disposes the
         /// <see cref="HttpResponseMessage"/> and <see cref="HttpRequestMessage"/> upon completion.
         /// </summary>
         /// <param name="httpContextBase">The HTTP context base.</param>
@@ -193,11 +192,16 @@ namespace System.Web.Http.WebHost
             // Choose a buffered or bufferless input stream based on user's policy
             IHostBufferPolicySelector policySelector = _bufferPolicySelector.Value;
             bool isInputBuffered = policySelector == null ? true : policySelector.UseBufferedInputStream(httpContextBase);
-            Stream inputStream = isInputBuffered
-                                    ? requestBase.InputStream
-                                    : httpContextBase.ApplicationInstance.Request.GetBufferlessInputStream();
 
-            request.Content = new StreamContent(inputStream);
+            if (isInputBuffered)
+            {
+                request.Content = new LazyStreamContent(() => requestBase.InputStream);
+            }
+            else
+            {
+                request.Content = new LazyStreamContent(() => requestBase.GetBufferlessInputStream());
+            }
+
             foreach (string headerName in requestBase.Headers)
             {
                 string[] values = requestBase.Headers.GetValues(headerName);
@@ -207,6 +211,9 @@ namespace System.Web.Http.WebHost
             // Add context to enable route lookup later on
             request.SetHttpContext(httpContextBase);
 
+            HttpRequestContext requestContext = new WebHostHttpRequestContext(httpContextBase, requestBase, request);
+            request.SetRequestContext(requestContext);
+
             IDictionary httpContextItems = httpContextBase.Items;
 
             // Add the OWIN environment, when available (such as when using the OWIN integrated pipeline HTTP module).
@@ -214,6 +221,9 @@ namespace System.Web.Http.WebHost
             {
                 request.Properties.Add(OwinEnvironmentKey, httpContextItems[OwinEnvironmentHttpContextKey]);
             }
+
+            // The following three properties are set for backwards compatibility only. The request context controls
+            // the behavior for all cases except when accessing the property directly by key.
 
             // Add the retrieve client certificate delegate to the property bag to enable lookup later on
             request.Properties.Add(HttpPropertyKeys.RetrieveClientCertificateDelegateKey, _retrieveClientCertificate);
@@ -228,7 +238,7 @@ namespace System.Web.Http.WebHost
         }
 
         /// <summary>
-        /// Prevents the <see cref="T:System.Web.Security.FormsAuthenticationModule"/> from altering a 401 response to 302 by 
+        /// Prevents the <see cref="T:System.Web.Security.FormsAuthenticationModule"/> from altering a 401 response to 302 by
         /// setting <see cref="P:System.Web.HttpResponseBase.SuppressFormsAuthenticationRedirect" /> to <c>true</c> if available.
         /// </summary>
         /// <param name="httpContextBase">The HTTP context base.</param>
@@ -278,25 +288,26 @@ namespace System.Web.Http.WebHost
 
             return isBuffered
                     ? WriteBufferedResponseContentAsync(httpContextBase, responseContent, request)
-                    : WriteStreamedResponseContentAsync(httpResponseBase, responseContent);
+                    : WriteStreamedResponseContentAsync(httpContextBase, responseContent);
         }
 
         [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "All exceptions caught here become error responses")]
-        internal static async Task WriteStreamedResponseContentAsync(HttpResponseBase httpResponseBase, HttpContent responseContent)
+        internal static async Task WriteStreamedResponseContentAsync(HttpContextBase httpContextBase, HttpContent responseContent)
         {
-            Contract.Assert(httpResponseBase != null);
+            Contract.Assert(httpContextBase != null);
+            Contract.Assert(httpContextBase.Response != null);
             Contract.Assert(responseContent != null);
 
             try
             {
                 // Copy the HttpContent into the output stream asynchronously.
-                await responseContent.CopyToAsync(httpResponseBase.OutputStream);
+                await responseContent.CopyToAsync(httpContextBase.Response.OutputStream);
             }
             catch
             {
                 // Streamed content may have been written and cannot be recalled.
                 // Our only choice is to abort the connection.
-                AbortConnection(httpResponseBase);
+                httpContextBase.Request.Abort();
             }
         }
 
@@ -478,12 +489,6 @@ namespace System.Web.Http.WebHost
             httpResponseBase.SuppressContent = true;
         }
 
-        private static void AbortConnection(HttpResponseBase httpResponseBase)
-        {
-            // TODO: DevDiv bug #381233 -- call HttpResponse.Abort when it becomes available in 4.5
-            httpResponseBase.Close();
-        }
-
         private static X509Certificate2 RetrieveClientCertificate(HttpRequestMessage request)
         {
             if (request == null)
@@ -503,6 +508,67 @@ namespace System.Web.Http.WebHost
             }
 
             return result;
+        }
+
+        private class DelegatingStreamContent : StreamContent
+        {
+            public DelegatingStreamContent(Stream stream)
+                : base(stream) 
+            { 
+            }
+
+            public Task WriteToStreamAsync(Stream stream, TransportContext context)
+            {
+                return SerializeToStreamAsync(stream, context);
+            }
+
+            public bool TryCalculateLength(out long length)
+            {
+                return TryComputeLength(out length);
+            }
+
+            public Task<Stream> GetContentReadStreamAsync()
+            {
+                return CreateContentReadStreamAsync();
+            }
+        }
+
+        private class LazyStreamContent : HttpContent
+        {
+            private readonly Func<Stream> _getStream;
+            private DelegatingStreamContent _streamContent;
+
+            public LazyStreamContent(Func<Stream> getStream)
+            {
+                _getStream = getStream;
+            }
+
+            private DelegatingStreamContent StreamContent
+            {
+                get
+                {
+                    if (_streamContent == null)
+                    {
+                        _streamContent = new DelegatingStreamContent(_getStream());
+                    }
+                    return _streamContent;
+                }
+            }
+
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext context)
+            {
+                return StreamContent.WriteToStreamAsync(stream, context);
+            }
+
+            protected override Task<Stream> CreateContentReadStreamAsync()
+            {
+                return StreamContent.GetContentReadStreamAsync();
+            }
+
+            protected override bool TryComputeLength(out long length)
+            {
+                return StreamContent.TryCalculateLength(out length);
+            }
         }
     }
 }

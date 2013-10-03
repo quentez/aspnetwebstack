@@ -3,13 +3,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Web.Http.Controllers;
 
 namespace System.Web.Http.Routing
 {
     /// <summary>
     /// Builds <see cref="IHttpRoute"/> instances based on route information.
     /// </summary>
-    public class HttpRouteBuilder
+    internal class HttpRouteBuilder
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="HttpRouteBuilder" /> class using the default inline constraint resolver.
@@ -39,56 +40,87 @@ namespace System.Web.Http.Routing
         /// Builds an <see cref="IHttpRoute"/> for a particular action.
         /// </summary>
         /// <param name="routeTemplate">The tokenized route template for the route.</param>
-        /// <param name="httpMethods">The HTTP methods supported by the route.</param>
-        /// <param name="controllerName">The name of the associated controller.</param>
-        /// <param name="actionName">The name of the associated action.</param>
+        /// <param name="order">The subroute order.</param>
+        /// <param name="actions">The actions to invoke for the route.</param>
         /// <returns>The generated <see cref="IHttpRoute"/>.</returns>
-        public virtual IHttpRoute BuildHttpRoute(string routeTemplate, IEnumerable<HttpMethod> httpMethods, string controllerName, string actionName)
+        public virtual IHttpRoute BuildParsingRoute(
+            string routeTemplate,
+            int order,
+            IEnumerable<ReflectedHttpActionDescriptor> actions)
         {
             if (routeTemplate == null)
             {
                 throw Error.ArgumentNull("routeTemplate");
             }
 
-            if (controllerName == null)
-            {
-                throw Error.ArgumentNull("controllerName");
-            }
-
-            if (actionName == null)
-            {
-                throw Error.ArgumentNull("actionName");
-            }
-
-            HttpRouteValueDictionary defaults = new HttpRouteValueDictionary
-            {
-                { RouteKeys.ControllerKey, controllerName },
-                { RouteKeys.ActionKey, actionName }
-            };
-
+            HttpRouteValueDictionary defaults = new HttpRouteValueDictionary();
             HttpRouteValueDictionary constraints = new HttpRouteValueDictionary();
-            if (httpMethods != null)
-            {
-                // Current method constraint implementation is inefficient since it matches before running the constraint.
-                // Consider checking the HTTP method first in a custom route as a performance optimization.
-                constraints.Add("httpMethod", new HttpMethodConstraint(httpMethods.ToArray()));
-            }
 
             string detokenizedRouteTemplate = InlineRouteTemplateParser.ParseRouteTemplate(routeTemplate, defaults, constraints, ConstraintResolver);
 
-            return BuildHttpRoute(defaults, constraints, detokenizedRouteTemplate);
+            return BuildParsingRoute(detokenizedRouteTemplate, order, defaults, constraints, actions);
         }
 
         /// <summary>
         /// Builds an <see cref="IHttpRoute"/>.
         /// </summary>
+        /// <param name="routeTemplate">The detokenized route template.</param>
+        /// <param name="order">The subroute order.</param>
         /// <param name="defaults">The route defaults.</param>
         /// <param name="constraints">The route constraints.</param>
-        /// <param name="routeTemplate">The detokenized route template.</param>
+        /// <param name="actions">The actions to invoke for the route.</param>
         /// <returns>The generated <see cref="IHttpRoute"/>.</returns>
-        public virtual IHttpRoute BuildHttpRoute(HttpRouteValueDictionary defaults, HttpRouteValueDictionary constraints, string routeTemplate)
+        public virtual IHttpRoute BuildParsingRoute(
+            string routeTemplate,
+            int order,
+            HttpRouteValueDictionary defaults,
+            HttpRouteValueDictionary constraints,
+            IEnumerable<ReflectedHttpActionDescriptor> actions)
         {
-            return new HttpRoute(routeTemplate, defaults, constraints);
+            return BuildDirectRoute(routeTemplate, order, defaults, constraints, actions);
+        }
+
+        public virtual IHttpRoute BuildGenerationRoute(IHttpRoute parsingRoute)
+        {
+            return new GenerateRoute(parsingRoute);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="HttpRoute" /> class.
+        /// </summary>
+        /// <param name="routeTemplate">The route template.</param>
+        /// <param name="order">The subroute order.</param>
+        /// <param name="actions">The actions that are reachable via this route.</param>
+        public static HttpRoute BuildDirectRoute(string routeTemplate, int order, IEnumerable<ReflectedHttpActionDescriptor> actions)            
+        {
+            return BuildDirectRoute(routeTemplate, order, defaults: null, constraints: null, actions: actions);
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="HttpRoute" /> class.
+        /// </summary>
+        /// <param name="routeTemplate">The route template.</param>
+        /// <param name="order">The subroute order.</param>
+        /// <param name="defaults">The default values.</param>
+        /// <param name="constraints">The route constraints.</param>
+        /// <param name="actions">The actions that are reachable via this route.</param>
+        public static HttpRoute BuildDirectRoute(
+            string routeTemplate,
+            int order,
+            HttpRouteValueDictionary defaults,
+            HttpRouteValueDictionary constraints,
+            IEnumerable<ReflectedHttpActionDescriptor> actions)
+        {
+            HttpRoute route = new HttpRoute(routeTemplate, defaults: defaults, constraints: constraints, dataTokens: null, handler: null);
+
+            if (actions != null)
+            {
+                route.DataTokens[RouteKeys.OrderDataTokenKey] = order;
+                route.DataTokens[RouteKeys.PrecedenceDataTokenKey] = route.ParsedRoute.GetPrecedence(constraints);
+                route.DataTokens[RouteKeys.ActionsDataTokenKey] = actions.AsArray();
+            }
+            
+            return route;
         }
     }
 }

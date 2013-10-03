@@ -11,13 +11,13 @@ using System.Net.Http.Headers;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
-using System.Web.Http.Hosting;
 using System.Web.Http.OData.Builder;
 using System.Web.Http.OData.Formatter.Deserialization;
 using System.Web.Http.OData.Formatter.Serialization;
 using System.Web.Http.OData.Routing;
 using System.Web.Http.OData.TestCommon.Models;
 using System.Web.Http.Routing;
+using System.Web.Http.TestCommon;
 using Microsoft.Data.Edm;
 using Microsoft.Data.Edm.Library;
 using Microsoft.Data.OData;
@@ -151,7 +151,7 @@ namespace System.Web.Http.OData.Formatter
             HttpRouteData routeData = new HttpRouteData(new HttpRoute());
             routeData.Values.Add("a", "prefix");
             routeData.Values.Add("b", "prefix2");
-            request.Properties[HttpPropertyKeys.HttpRouteDataKey] = routeData;
+            request.SetRouteData(routeData);
 
             ODataMediaTypeFormatter formatter = CreateFormatter(model, request, ODataPayloadKind.ServiceDocument);
             var content = new ObjectContent<ODataWorkspace>(new ODataWorkspace(), formatter);
@@ -321,20 +321,21 @@ namespace System.Web.Http.OData.Formatter
         {
             // Arrange
             var model = CreateModel();
-
+            var request = CreateFakeODataRequest(model);
             Mock<ODataSerializer> serializer = new Mock<ODataSerializer>(ODataPayloadKind.Property);
             Mock<ODataSerializerProvider> serializerProvider = new Mock<ODataSerializerProvider>();
 
-            serializerProvider.Setup(p => p.GetODataPayloadSerializer(model, typeof(int))).Returns(serializer.Object);
+            serializerProvider.Setup(p => p.GetODataPayloadSerializer(model, typeof(int), request)).Returns(serializer.Object);
             serializer
-                .Setup(s => s.WriteObject(42, It.IsAny<ODataMessageWriter>(), It.Is<ODataSerializerContext>(c => c.MetadataLevel == ODataMetadataLevel.FullMetadata)))
+                .Setup(s => s.WriteObject(42, typeof(int), It.IsAny<ODataMessageWriter>(),
+                    It.Is<ODataSerializerContext>(c => c.MetadataLevel == ODataMetadataLevel.FullMetadata)))
                 .Verifiable();
 
 
             ODataDeserializerProvider deserializerProvider = new DefaultODataDeserializerProvider();
 
             var formatter = new ODataMediaTypeFormatter(deserializerProvider, serializerProvider.Object, Enumerable.Empty<ODataPayloadKind>());
-            formatter.Request = CreateFakeODataRequest(model);
+            formatter.Request = request;
             HttpContent content = new StringContent("42");
             content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json;odata=fullmetadata");
 
@@ -350,21 +351,22 @@ namespace System.Web.Http.OData.Formatter
         {
             // Arrange
             var model = CreateModel();
+            var request = CreateFakeODataRequest(model);
             SelectExpandClause selectExpandClause =
                 new SelectExpandClause(new SelectItem[0], allSelected: true);
+            request.SetSelectExpandClause(selectExpandClause);
 
             Mock<ODataSerializer> serializer = new Mock<ODataSerializer>(ODataPayloadKind.Property);
             Mock<ODataSerializerProvider> serializerProvider = new Mock<ODataSerializerProvider>();
 
-            serializerProvider.Setup(p => p.GetODataPayloadSerializer(model, typeof(int))).Returns(serializer.Object);
+            serializerProvider.Setup(p => p.GetODataPayloadSerializer(model, typeof(int), request)).Returns(serializer.Object);
             serializer
-                .Setup(s => s.WriteObject(42, It.IsAny<ODataMessageWriter>(), It.Is<ODataSerializerContext>(c => c.SelectExpandClause == selectExpandClause)))
+                .Setup(s => s.WriteObject(42, typeof(int), It.IsAny<ODataMessageWriter>(),
+                    It.Is<ODataSerializerContext>(c => c.SelectExpandClause == selectExpandClause)))
                 .Verifiable();
 
             ODataDeserializerProvider deserializerProvider = new DefaultODataDeserializerProvider();
 
-            var request = CreateFakeODataRequest(model);
-            request.SetSelectExpandClause(selectExpandClause);
             var formatter = new ODataMediaTypeFormatter(deserializerProvider, serializerProvider.Object, Enumerable.Empty<ODataPayloadKind>());
             formatter.Request = request;
             HttpContent content = new StringContent("42");
@@ -375,6 +377,24 @@ namespace System.Web.Http.OData.Formatter
 
             // Assert
             serializer.Verify();
+        }
+
+        [Fact]
+        public void MessageReaderSettings_Property()
+        {
+            var formatter = CreateFormatter();
+
+            Assert.NotNull(formatter.MessageReaderSettings);
+            Assert.True(formatter.MessageReaderSettings.DisableMessageStreamDisposal);
+        }
+
+        [Fact]
+        public void MessageWriterSettings_Property()
+        {
+            var formatter = CreateFormatter();
+
+            Assert.NotNull(formatter.MessageWriterSettings);
+            Assert.True(formatter.MessageWriterSettings.DisableMessageStreamDisposal);
         }
 
         [Fact]
@@ -406,7 +426,7 @@ namespace System.Web.Http.OData.Formatter
         public void MessageReaderQuotas_Is_Passed_To_ODataLib()
         {
             ODataMediaTypeFormatter formatter = CreateFormatter();
-            formatter.MessageReaderQuotas.MaxReceivedMessageSize = 1;
+            formatter.MessageReaderSettings.MessageQuotas.MaxReceivedMessageSize = 1;
 
             HttpContent content = new StringContent("{ 'Number' : '42' }");
             content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
@@ -417,15 +437,44 @@ namespace System.Web.Http.OData.Formatter
         }
 
         [Fact]
+        public void InvalidXmlCharacters_CanBeWrittenByDefault_InAtom()
+        {
+            ODataMediaTypeFormatter formatter = CreateFormatter();
+            Stream stream = new MemoryStream();
+            HttpContent content = new StreamContent(stream);
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/xml");
+
+            Assert.DoesNotThrow(
+                () => formatter.WriteToStreamAsync(typeof(string), "Hello\x16", stream, content, null));
+        }
+
+        [Fact]
+        public void InvalidXmlCharacters_RaiseExceptionsIfCheckCharactersIsTrue_InAtom()
+        {
+            ODataMediaTypeFormatter formatter = CreateFormatter();
+            formatter.MessageWriterSettings.CheckCharacters = true;
+            Stream stream = new MemoryStream();
+            HttpContent content = new StreamContent(stream);
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/xml");
+
+            //formatter.WriteToStreamAsync(typeof(string), "Hello\x16", stream, content, null).Wait();
+            Assert.Throws<ArgumentException>(
+                () => formatter.WriteToStreamAsync(typeof(string), "Hello\x16", stream, content, null).Wait(),
+                 "'\x16', hexadecimal value 0x16, is an invalid character.");
+        }
+
+        [Fact]
         public void Request_IsPassedThroughDeserializerContext()
         {
             // Arrange
             var model = CreateModel();
             var request = CreateFakeODataRequest(model);
-            Mock<ODataDeserializer> deserializer = new Mock<ODataDeserializer>(ODataPayloadKind.Property);
+            Mock<ODataEdmTypeDeserializer> deserializer = new Mock<ODataEdmTypeDeserializer>(ODataPayloadKind.Property);
             Mock<ODataDeserializerProvider> deserializerProvider = new Mock<ODataDeserializerProvider>();
-            deserializerProvider.Setup(p => p.GetODataDeserializer(model, typeof(int))).Returns(deserializer.Object);
-            deserializer.Setup(d => d.Read(It.IsAny<ODataMessageReader>(), It.Is<ODataDeserializerContext>(c => c.Request == request))).Verifiable();
+            deserializerProvider.Setup(p => p.GetEdmTypeDeserializer(It.IsAny<IEdmTypeReference>())).Returns(deserializer.Object);
+            deserializer
+                .Setup(d => d.Read(It.IsAny<ODataMessageReader>(), typeof(int), It.Is<ODataDeserializerContext>(c => c.Request == request)))
+                .Verifiable();
             ODataSerializerProvider serializerProvider = new DefaultODataSerializerProvider();
 
             var formatter = new ODataMediaTypeFormatter(deserializerProvider.Object, serializerProvider, Enumerable.Empty<ODataPayloadKind>());
@@ -440,33 +489,110 @@ namespace System.Web.Http.OData.Formatter
             deserializer.Verify();
         }
 
-        public static TheoryDataSet<IEnumerable<ODataPayloadKind>, Type, bool> CanWriteType_ReturnsExpectedResult_ForEdmObjects_TestData
+        public static TheoryDataSet<ODataPath, ODataPayloadKind> CanReadTypeTypesTestData
         {
             get
             {
-                IEnumerable<ODataPayloadKind> allPayloadKinds = Enum.GetValues(typeof(ODataPayloadKind)).Cast<ODataPayloadKind>();
-                return new TheoryDataSet<IEnumerable<ODataPayloadKind>, Type, bool>
+                CustomersModelWithInheritance model = new CustomersModelWithInheritance();
+                EntitySetPathSegment entitySetSegment = new EntitySetPathSegment(model.Customers);
+                KeyValuePathSegment keyValueSegment = new KeyValuePathSegment("42");
+                NavigationPathSegment navSegment = new NavigationPathSegment(model.Customer.FindProperty("Orders") as IEdmNavigationProperty);
+                PropertyAccessPathSegment propertySegment = new PropertyAccessPathSegment(model.Customer.FindProperty("Address") as IEdmStructuralProperty);
+
+                return new TheoryDataSet<ODataPath, ODataPayloadKind>
                 {
-                    { new[] { ODataPayloadKind.Entry }, typeof(IEdmObject), true },
-                    { allPayloadKinds.Except(new[] { ODataPayloadKind.Entry }), typeof(IEdmObject), false },
-                    { new[] { ODataPayloadKind.Feed }, typeof(IEdmObject), false },
-                    { new[] { ODataPayloadKind.Entry }, typeof(FeedEdmObject), false },
-                    { allPayloadKinds.Except(new[] { ODataPayloadKind.Feed }), typeof(FeedEdmObject), false },
-                    { new[] { ODataPayloadKind.Feed }, typeof(FeedEdmObject), true }
+                    { new ODataPath(entitySetSegment), ODataPayloadKind.Entry }, // POST ~/entityset
+                    { new ODataPath(entitySetSegment, keyValueSegment), ODataPayloadKind.Entry }, // PUT ~/entityset(key)
+                    { new ODataPath(entitySetSegment, keyValueSegment, navSegment), ODataPayloadKind.Entry }, // PUT ~/entityset(key)/nav
+                    { new ODataPath(entitySetSegment, keyValueSegment, propertySegment), ODataPayloadKind.Property }
+                };
+            }
+        }
+
+        [Theory]
+        [PropertyData("CanReadTypeTypesTestData")]
+        public void CanReadType_ForTypeless_ReturnsExpectedResult_DependingOnODataPathAndPayloadKind(ODataPath path, ODataPayloadKind payloadKind)
+        {
+            // Arrange
+            IEnumerable<ODataPayloadKind> allPayloadKinds = Enum.GetValues(typeof(ODataPayloadKind)).Cast<ODataPayloadKind>();
+            var model = CreateModel();
+            var request = CreateFakeODataRequest(model);
+            request.SetODataPath(path);
+
+            var formatterWithGivenPayload = new ODataMediaTypeFormatter(new[] { payloadKind }) { Request = request };
+            var formatterWithoutGivenPayload = new ODataMediaTypeFormatter(allPayloadKinds.Except(new[] { payloadKind })) { Request = request };
+
+            // Act & Assert
+            Assert.True(formatterWithGivenPayload.CanReadType(typeof(IEdmObject)));
+            Assert.False(formatterWithoutGivenPayload.CanReadType(typeof(IEdmObject)));
+        }
+
+        public static TheoryDataSet<ODataPayloadKind, Type> CanWriteType_ReturnsExpectedResult_ForEdmObjects_TestData
+        {
+            get
+            {
+                Type entityCollectionEdmObjectType = new Mock<IEdmObject>().As<IEnumerable<IEdmEntityObject>>().Object.GetType();
+                Type complexCollectionEdmObjectType = new Mock<IEdmObject>().As<IEnumerable<IEdmComplexObject>>().Object.GetType();
+
+                return new TheoryDataSet<ODataPayloadKind, Type>
+                {
+                    { ODataPayloadKind.Entry , typeof(IEdmEntityObject) },
+                    { ODataPayloadKind.Entry , typeof(TypedEdmEntityObject) },
+                    { ODataPayloadKind.Feed , entityCollectionEdmObjectType },
+                    { ODataPayloadKind.Feed , typeof(IEnumerable<IEdmEntityObject>) },
+                    { ODataPayloadKind.Property , typeof(IEdmComplexObject) },
+                    { ODataPayloadKind.Property , typeof(TypedEdmComplexObject) },
+                    { ODataPayloadKind.Collection , complexCollectionEdmObjectType },
+                    { ODataPayloadKind.Collection , typeof(IEnumerable<IEdmComplexObject>) },
+                    { ODataPayloadKind.Property, typeof(NullEdmComplexObject) }
                 };
             }
         }
 
         [Theory]
         [PropertyData("CanWriteType_ReturnsExpectedResult_ForEdmObjects_TestData")]
-        public void CanWriteType_ReturnsExpectedResult_ForEdmObjects(IEnumerable<ODataPayloadKind> payloadKinds, Type type, bool canWrite)
+        public void CanWriteType_ReturnsTrueForEdmObjects_WithRightPayload(ODataPayloadKind payloadKind, Type type)
+        {
+            // Arrange
+            IEnumerable<ODataPayloadKind> allPayloadKinds = Enum.GetValues(typeof(ODataPayloadKind)).Cast<ODataPayloadKind>();
+            var model = CreateModel();
+            var request = CreateFakeODataRequest(model);
+
+            var formatterWithGivenPayload = new ODataMediaTypeFormatter(new[] { payloadKind }) { Request = request };
+            var formatterWithoutGivenPayload = new ODataMediaTypeFormatter(allPayloadKinds.Except(new[] { payloadKind })) { Request = request };
+
+            // Act & Assert
+            Assert.True(formatterWithGivenPayload.CanWriteType(type));
+            Assert.False(formatterWithoutGivenPayload.CanWriteType(type));
+        }
+
+        public static TheoryDataSet<Type> InvalidIEdmObjectImplementationTypes
+        {
+            get
+            {
+                return new TheoryDataSet<Type>
+                {
+                    typeof(IEdmObject),
+                    typeof(TypedEdmStructuredObject),
+                    new Mock<IEdmObject>().Object.GetType(),
+                    new Mock<IEdmObject>().As<IEnumerable<IEdmObject>>().Object.GetType()
+                };
+            }
+        }
+
+        [Theory]
+        [PropertyData("InvalidIEdmObjectImplementationTypes")]
+        public void CanWriteType_ReturnsFalse_ForInvalidIEdmObjectImplementations_NoMatterThePayload(Type type)
         {
             var model = CreateModel();
             var request = CreateFakeODataRequest(model);
-            var formatter = new ODataMediaTypeFormatter(payloadKinds);
+            IEnumerable<ODataPayloadKind> allPayloadKinds = Enum.GetValues(typeof(ODataPayloadKind)).Cast<ODataPayloadKind>();
+            var formatter = new ODataMediaTypeFormatter(allPayloadKinds);
             formatter.Request = request;
 
-            Assert.Equal(canWrite, formatter.CanWriteType(type));
+            var result = formatter.CanWriteType(type);
+
+            Assert.False(result);
         }
 
         [Fact]
@@ -487,24 +613,6 @@ namespace System.Web.Http.OData.Formatter
         }
 
         [Fact]
-        public void WriteToStreamAsync_ThrowsSerializationException_IfEdmTypeIsNotEntityOrFeed()
-        {
-            var model = CreateModel();
-            var request = CreateFakeODataRequest(model);
-            var formatter = new ODataMediaTypeFormatter(new ODataPayloadKind[0]);
-            formatter.Request = request;
-
-            Mock<IEdmObject> edmObject = new Mock<IEdmObject>();
-            edmObject.Setup(e => e.GetEdmType()).Returns(EdmCoreModel.Instance.GetPrimitive(EdmPrimitiveTypeKind.Int32, isNullable: false));
-
-            Assert.Throws<SerializationException>(
-                () => formatter
-                    .WriteToStreamAsync(typeof(int), edmObject.Object, new MemoryStream(), new Mock<HttpContent>().Object, transportContext: null)
-                    .Wait(),
-                "ODataMediaTypeFormatter does not support serializing an IEdmObject of EDM type '[Edm.Int32 Nullable=False]'.");
-        }
-
-        [Fact]
         public void WriteToStreamAsync_UsesTheRightEdmSerializer_ForEdmObjects()
         {
             // Arrange
@@ -515,8 +623,10 @@ namespace System.Web.Http.OData.Formatter
             Mock<IEdmObject> instance = new Mock<IEdmObject>();
             instance.Setup(e => e.GetEdmType()).Returns(edmType);
 
-            Mock<ODataEdmTypeSerializer> serializer = new Mock<ODataEdmTypeSerializer>(edmType, ODataPayloadKind.Entry);
-            serializer.Setup(s => s.WriteObject(instance.Object, It.IsAny<ODataMessageWriter>(), It.IsAny<ODataSerializerContext>())).Verifiable();
+            Mock<ODataEdmTypeSerializer> serializer = new Mock<ODataEdmTypeSerializer>(ODataPayloadKind.Entry);
+            serializer
+                .Setup(s => s.WriteObject(instance.Object, instance.GetType(), It.IsAny<ODataMessageWriter>(), It.IsAny<ODataSerializerContext>()))
+                .Verifiable();
 
             Mock<ODataSerializerProvider> serializerProvider = new Mock<ODataSerializerProvider>();
             serializerProvider.Setup(s => s.GetEdmTypeSerializer(edmType)).Returns(serializer.Object);
@@ -544,6 +654,60 @@ namespace System.Web.Http.OData.Formatter
             ODataMediaTypeFormatter formatter = CreateFormatter(model, request, ODataPayloadKind.Entry);
 
             Assert.Equal(expectedCanWriteTypeResult, formatter.CanWriteType(type));
+        }
+
+        [Fact]
+        public void WriteToStreamAsync_SetsMetadataUriWithSelectClause_OnODataWriterSettings()
+        {
+            // Arrange
+            MemoryStream stream = new MemoryStream();
+            StreamContent content = new StreamContent(stream);
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+
+            IEdmModel model = CreateModel();
+            HttpRequestMessage request = CreateFakeODataRequest(model);
+            request.RequestUri = new Uri("http://localhost/Customers?$select=something");
+            request.SetSelectExpandClause(new SelectExpandClause(new SelectItem[0], allSelected: true));
+
+            ODataMediaTypeFormatter formatter = CreateFormatter(model, request, ODataPayloadKind.Entry);
+
+            // Act
+            formatter.WriteToStreamAsync(typeof(SampleType[]), new SampleType[0], stream, content, transportContext: null);
+
+            // Assert
+            // This is ugly, but ODataWriter doesn't expose the writer settings that it uses. So, validate that
+            // the $select clause shows up in the response payload.
+            stream.Seek(0, SeekOrigin.Begin);
+            string result = content.ReadAsStringAsync().Result;
+            Assert.Contains("$select=something", result);
+        }
+
+        [Fact]
+        public void ReadFromStreamAsync_UsesRightDeserializerFrom_ODataDeserializerProvider()
+        {
+            // Arrange
+            MemoryStream stream = new MemoryStream();
+            StringContent content = new StringContent("42");
+            content.Headers.ContentType = MediaTypeHeaderValue.Parse("application/json");
+
+            IEdmModel model = CreateModel();
+            HttpRequestMessage request = CreateFakeODataRequest(model);
+            Mock<ODataDeserializer> deserializer = new Mock<ODataDeserializer>(ODataPayloadKind.Property);
+            deserializer.Setup(d => d.Read(It.IsAny<ODataMessageReader>(), typeof(int), It.IsAny<ODataDeserializerContext>()))
+                .Verifiable();
+
+            Mock<ODataDeserializerProvider> provider = new Mock<ODataDeserializerProvider>();
+            provider.Setup(p => p.GetODataDeserializer(model, typeof(int), request)).Returns(deserializer.Object);
+
+            // Act
+            ODataMediaTypeFormatter formatter = new ODataMediaTypeFormatter(provider.Object,
+                new DefaultODataSerializerProvider(), Enumerable.Empty<ODataPayloadKind>());
+            formatter.Request = request;
+
+            formatter.ReadFromStreamAsync(typeof(int), stream, content, null);
+
+            // Assert
+            deserializer.Verify();
         }
 
         private static Encoding CreateEncoding(string name)
@@ -671,19 +835,6 @@ namespace System.Web.Http.OData.Formatter
 
         private class TypeNotInModel
         {
-        }
-
-        private class FeedEdmObject : IEdmObject, IEnumerable
-        {
-            public IEnumerator GetEnumerator()
-            {
-                throw new NotImplementedException();
-            }
-
-            public IEdmTypeReference GetEdmType()
-            {
-                throw new NotImplementedException();
-            }
         }
     }
 }

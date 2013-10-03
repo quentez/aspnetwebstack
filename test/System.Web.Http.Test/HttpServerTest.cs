@@ -5,7 +5,9 @@ using System.Net.Http;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Http.Controllers;
 using System.Web.Http.Dispatcher;
+using System.Web.Http.Routing;
 using Microsoft.TestCommon;
 using Moq;
 using Moq.Protected;
@@ -23,7 +25,7 @@ namespace System.Web.Http
         [Fact]
         public void DefaultConstructor()
         {
-            Assert.NotNull(new HttpServer());
+            Assert.DoesNotThrow(() => new HttpServer());
         }
 
         [Fact]
@@ -217,6 +219,206 @@ namespace System.Web.Http
                               Assert.Same(principal, callbackPrincipal);
                               Assert.Same(principal, Thread.CurrentPrincipal);
                           });
+        }
+
+        [Fact]
+        public void SendAsync_Handles_ExceptionsThrownInMessageHandlers()
+        {
+            // Arrange
+            var config = new HttpConfiguration();
+            config.MessageHandlers.Add(new ThrowingMessageHandler(new InvalidOperationException()));
+            HttpServer server = new HttpServer(config);
+            var invoker = new HttpMessageInvoker(server);
+
+            // Act
+            var response = invoker.SendAsync(new HttpRequestMessage(), CancellationToken.None).Result;
+
+            // Assert
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        }
+
+        [Fact]
+        public void SendAsync_Handles_HttpResponseExceptionsThrownInMessageHandlers()
+        {
+            // Arrange
+            HttpResponseException exception = new HttpResponseException(new HttpResponseMessage(HttpStatusCode.HttpVersionNotSupported));
+            exception.Response.ReasonPhrase = "whatever";
+            var config = new HttpConfiguration();
+            config.MessageHandlers.Add(new ThrowingMessageHandler(exception));
+            HttpServer server = new HttpServer(config);
+            var invoker = new HttpMessageInvoker(server);
+
+            // Act
+            var response = invoker.SendAsync(new HttpRequestMessage(), CancellationToken.None).Result;
+
+            // Assert
+            Assert.Equal(exception.Response.StatusCode, response.StatusCode);
+            Assert.Equal(exception.Response.ReasonPhrase, response.ReasonPhrase);
+        }
+
+        [Fact]
+        public void SendAsync_Handles_ExceptionsThrownInCustomRoutes()
+        {
+            // Arrange
+            var config = new HttpConfiguration();
+            config.Routes.Add("throwing route", new ThrowingRoute(new InvalidOperationException()));
+            HttpServer server = new HttpServer(config);
+            var invoker = new HttpMessageInvoker(server);
+
+            // Act
+            var response = invoker.SendAsync(new HttpRequestMessage(), CancellationToken.None).Result;
+
+            // Assert
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        }
+
+        [Fact]
+        public void SendAsync_Handles_HttpResponseExceptionsThrownInCustomRoutes()
+        {
+            // Arrange
+            HttpResponseException exception = new HttpResponseException(new HttpResponseMessage(HttpStatusCode.HttpVersionNotSupported));
+            exception.Response.ReasonPhrase = "whatever";
+            var config = new HttpConfiguration();
+            config.Routes.Add("throwing route", new ThrowingRoute(exception));
+            HttpServer server = new HttpServer(config);
+            var invoker = new HttpMessageInvoker(server);
+
+            // Act
+            var response = invoker.SendAsync(new HttpRequestMessage(), CancellationToken.None).Result;
+
+            // Assert
+            Assert.Equal(exception.Response.StatusCode, response.StatusCode);
+            Assert.Equal(exception.Response.ReasonPhrase, response.ReasonPhrase);
+        }
+
+        [Fact]
+        public void HttpServerAddsDefaultRequestContext()
+        {
+            // Arrange
+            HttpServer server = new HttpServer();
+            var handler = new ThrowIfNoContext();
+
+            server.Configuration.MessageHandlers.Add(handler);
+            server.Configuration.MapHttpAttributeRoutes();
+            server.Configuration.EnsureInitialized();
+
+            var invoker = new HttpMessageInvoker(server);
+
+            var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/Customers");
+
+            // Act
+            var response = invoker.SendAsync(request, CancellationToken.None).Result;
+
+            // Assert
+            response.EnsureSuccessStatusCode();
+            Assert.True(handler.ContextFound);
+        }
+
+        [Fact]
+        public void HttpServerDoesNotReplaceOriginalRequestContext()
+        {
+            // Arrange
+            HttpServer server = new HttpServer();
+            var handler = new ThrowIfNoContext();
+
+            server.Configuration.MessageHandlers.Add(handler);
+            server.Configuration.MapHttpAttributeRoutes();
+            server.Configuration.EnsureInitialized();
+
+            HttpMessageInvoker invoker = new HttpMessageInvoker(server);
+
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/Customers");
+
+            HttpRequestContext context = new HttpRequestContext();
+
+            request.SetRequestContext(context);
+
+            // Act
+            var response = invoker.SendAsync(request, CancellationToken.None).Result;
+
+            // Assert
+            response.EnsureSuccessStatusCode();
+            Assert.True(handler.ContextFound);
+            Assert.Equal(context, response.RequestMessage.GetRequestContext());
+        }
+
+        private class ThrowIfNoContext : DelegatingHandler
+        {
+            public bool ContextFound { get; set; }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                HttpRequestContext incomingContext = request.GetRequestContext();
+
+                if (incomingContext == null)
+                {
+                    throw new InvalidOperationException("context missing");
+                }
+
+                ContextFound = true;
+
+                Task<HttpResponseMessage> result = base.SendAsync(request, cancellationToken);
+
+                HttpRequestContext outgoingContext = result.Result.RequestMessage.GetRequestContext();
+
+                if (outgoingContext != incomingContext)
+                {
+                    throw new InvalidOperationException("context mismatch");
+                }
+
+                return result;
+            }
+        }
+
+        public class RequestHasContextController : ApiController
+        {
+            [Route("Customers")]
+            public IHttpActionResult Get()
+            {
+                if (RequestContext == null)
+                {
+                    return InternalServerError();
+                }
+
+                if (Request.GetRequestContext() == null)
+                {
+                    return BadRequest();
+                }
+
+                return Ok();
+            }
+        }
+
+        private class ThrowingMessageHandler : DelegatingHandler
+        {
+            private Exception _exception;
+
+            public ThrowingMessageHandler(Exception exception)
+            {
+                _exception = exception;
+            }
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                // dummy await so that the task doesn't get completed synchronously.
+                await Task.FromResult(42);
+                throw _exception;
+            }
+        }
+
+        private class ThrowingRoute : HttpRoute
+        {
+            private Exception _exception;
+
+            public ThrowingRoute(Exception exception)
+            {
+                _exception = exception;
+            }
+
+            public override IHttpRouteData GetRouteData(string virtualPathRoot, HttpRequestMessage request)
+            {
+                throw _exception;
+            }
         }
     }
 }

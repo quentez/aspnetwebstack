@@ -51,64 +51,50 @@ namespace System.Web.Http.Owin
         }
 
         [Fact]
-        public void UseWebApiWithMessageHandler_UsesAdapter()
+        public void UseWebApiWithHttpServer_UsesAdapter()
         {
-            var config = new HttpConfiguration();
-            var dispatcher = new Mock<HttpMessageHandler>().Object;
-            var appBuilder = new Mock<IAppBuilder>();
-            appBuilder
+            // Arrange
+            HttpServer httpServer = new Mock<HttpServer>().Object;
+            Mock<IAppBuilder> appBuilderMock = new Mock<IAppBuilder>();
+            appBuilderMock
                 .Setup(ab => ab.Use(
                     typeof(HttpMessageHandlerAdapter),
-                    It.Is<HttpServer>(s => s.Configuration == config && s.Dispatcher == dispatcher),
+                    httpServer,
                     It.IsAny<OwinBufferPolicySelector>()))
-                .Returns(appBuilder.Object)
+                .Returns(appBuilderMock.Object)
                 .Verifiable();
 
-            IAppBuilder returnedAppBuilder = appBuilder.Object.UseWebApi(config, dispatcher);
+            // Act
+            IAppBuilder returnedAppBuilder = appBuilderMock.Object.UseWebApi(httpServer);
 
-            Assert.Equal(appBuilder.Object, returnedAppBuilder);
-            appBuilder.Verify();
+            // Assert
+            Assert.Equal(appBuilderMock.Object, returnedAppBuilder);
+            appBuilderMock.Verify();
         }
 
         [Fact]
-        public void UseWebApiWithMessageHandler_UsesAdapterAndConfigBufferPolicySelector()
+        public void UseWebApiWithHttpServer_UsesAdapterAndConfigBufferPolicySelector()
         {
-            var config = new HttpConfiguration();
-            var bufferPolicySelector = new Mock<IHostBufferPolicySelector>().Object;
+            // Arrange
+            HttpConfiguration config = new HttpConfiguration();
+            IHostBufferPolicySelector bufferPolicySelector = new Mock<IHostBufferPolicySelector>().Object;
             config.Services.Replace(typeof(IHostBufferPolicySelector), bufferPolicySelector);
-            var dispatcher = new Mock<HttpMessageHandler>().Object;
-            var appBuilder = new Mock<IAppBuilder>();
-            appBuilder
+            HttpServer httpServer = new Mock<HttpServer>(config).Object;
+            Mock<IAppBuilder> appBuilderMock = new Mock<IAppBuilder>();
+            appBuilderMock
                 .Setup(ab => ab.Use(
                     typeof(HttpMessageHandlerAdapter),
-                    It.Is<HttpServer>(s => s.Configuration == config && s.Dispatcher == dispatcher),
+                    httpServer,
                     bufferPolicySelector))
-                .Returns(appBuilder.Object)
+                .Returns(appBuilderMock.Object)
                 .Verifiable();
 
-            IAppBuilder returnedAppBuilder = appBuilder.Object.UseWebApi(config, dispatcher);
+            // Act
+            IAppBuilder returnedAppBuilder = appBuilderMock.Object.UseWebApi(httpServer);
 
-            Assert.Equal(appBuilder.Object, returnedAppBuilder);
-            appBuilder.Verify();
-        }
-
-        [Fact]
-        public void UseHttpMessageHandler_UsesAdapter()
-        {
-            var messageHandler = new Mock<HttpMessageHandler>().Object;
-            var appBuilder = new Mock<IAppBuilder>();
-            appBuilder
-                .Setup(ab => ab.Use(
-                    typeof(HttpMessageHandlerAdapter),
-                    messageHandler,
-                    It.IsAny<OwinBufferPolicySelector>()))
-                .Returns(appBuilder.Object)
-                .Verifiable();
-
-            IAppBuilder returnedAppBuilder = appBuilder.Object.UseHttpMessageHandler(messageHandler);
-
-            Assert.Equal(appBuilder.Object, returnedAppBuilder);
-            appBuilder.Verify();
+            // Assert
+            Assert.Equal(appBuilderMock.Object, returnedAppBuilder);
+            appBuilderMock.Verify();
         }
     }
 }

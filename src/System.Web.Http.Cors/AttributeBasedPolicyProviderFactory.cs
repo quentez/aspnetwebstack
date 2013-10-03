@@ -58,7 +58,22 @@ namespace System.Web.Http.Cors
                             targetRequest.Properties.Add(property.Key, property.Value);
                         }
                     }
-                    actionDescriptor = SelectAction(targetRequest);
+
+                    HttpConfiguration config = request.GetConfiguration();
+                    if (config == null)
+                    {
+                        throw new InvalidOperationException(SRResources.NoConfiguration);
+                    }
+
+                    IHttpRouteData routeData = config.Routes.GetRouteData(request);
+                    if (routeData == null)
+                    {
+                        // No route data found for selecting action with EnableCorsAttribute, thus no ICorsPolicyProvider is returned
+                        // and let the CorsMessageHandler flow the request to the normal Web API pipeline.
+                        return null;
+                    }
+
+                    actionDescriptor = SelectAction(targetRequest, routeData, config);
                 }
                 catch
                 {
@@ -84,31 +99,6 @@ namespace System.Web.Http.Cors
             return GetCorsPolicyProvider(actionDescriptor);
         }
 
-        private static void RemoveOptionalRoutingParameters(IDictionary<string, object> routeValueDictionary)
-        {
-            Contract.Assert(routeValueDictionary != null);
-
-            // Get all keys for which the corresponding value is 'Optional'.
-            // Having a separate array is necessary so that we don't manipulate the dictionary while enumerating.
-            // This is on a hot-path and linq expressions are showing up on the profile, so do array manipulation.
-            int max = routeValueDictionary.Count;
-            int i = 0;
-            string[] matching = new string[max];
-            foreach (KeyValuePair<string, object> kv in routeValueDictionary)
-            {
-                if (kv.Value == RouteParameter.Optional)
-                {
-                    matching[i] = kv.Key;
-                    i++;
-                }
-            }
-            for (int j = 0; j < i; j++)
-            {
-                string key = matching[j];
-                routeValueDictionary.Remove(key);
-            }
-        }
-
         private ICorsPolicyProvider GetCorsPolicyProvider(HttpActionDescriptor actionDescriptor)
         {
             ICorsPolicyProvider policyProvider = null;
@@ -130,30 +120,34 @@ namespace System.Web.Http.Cors
             return policyProvider;
         }
 
-        private static HttpActionDescriptor SelectAction(HttpRequestMessage request)
+        private static HttpActionDescriptor SelectAction(HttpRequestMessage request, IHttpRouteData routeData, HttpConfiguration config)
         {
-            HttpConfiguration config = request.GetConfiguration();
-            if (config == null)
-            {
-                throw new InvalidOperationException(SRResources.NoConfiguration);
-            }
+            request.SetRouteData(routeData);
 
-            IHttpRouteData routeData = config.Routes.GetRouteData(request);
-            if (routeData == null)
-            {
-                throw new InvalidOperationException(SRResources.NoRouteData);
-            }
-            request.Properties[HttpPropertyKeys.HttpRouteDataKey] = routeData;
-
-            RemoveOptionalRoutingParameters(routeData.Values);
+            routeData.RemoveOptionalRoutingParameters();
 
             HttpControllerDescriptor controllerDescriptor = config.Services.GetHttpControllerSelector().SelectController(request);
 
             // Get the per-controller configuration
             config = controllerDescriptor.Configuration;
             request.SetConfiguration(config);
-            HttpControllerContext controllerContext = new HttpControllerContext(config, routeData, request)
+            HttpRequestContext requestContext = request.GetRequestContext();
+
+            if (requestContext == null)
             {
+                requestContext = new HttpRequestContext
+                {
+                    Configuration = config,
+                    RouteData = routeData,
+                    Url = new UrlHelper(request),
+                    VirtualPathRoot = config.VirtualPathRoot
+                };
+            }
+
+            HttpControllerContext controllerContext = new HttpControllerContext
+            {
+                RequestContext = requestContext,
+                Request = request,
                 ControllerDescriptor = controllerDescriptor
             };
 

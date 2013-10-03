@@ -2,6 +2,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -43,112 +44,124 @@ namespace System.Web.Mvc.Routing
 
         internal List<RouteEntry> MapMvcAttributeRoutes(ReflectedAsyncControllerDescriptor controllerDescriptor)
         {
-            RoutePrefixAttribute[] prefixAttributes = GetPrefixsFrom(controllerDescriptor)
-                .DefaultIfEmpty()
-                .ToArray();
-            RouteAreaAttribute area = GetAreaFrom(controllerDescriptor);
-            string areaName = GetAreaName(controllerDescriptor, area);
+            string prefix = controllerDescriptor.GetPrefixFrom();
+            ValidatePrefixTemplate(prefix, controllerDescriptor);
+
+            RouteAreaAttribute area = controllerDescriptor.GetAreaFrom();
+            string areaName = controllerDescriptor.GetAreaName(area);
             string areaPrefix = area != null ? area.AreaPrefix ?? area.AreaName : null;
+
+            ValidateAreaPrefixTemplate(areaPrefix, areaName, controllerDescriptor);
 
             string controllerName = controllerDescriptor.ControllerName;
 
             AsyncActionMethodSelector actionSelector = controllerDescriptor.Selector;
-            IEnumerable<MethodInfo> actionMethodsInfo = actionSelector.AliasedMethods
-                                                                      .Concat(actionSelector.NonAliasedMethods.SelectMany(x => x))
-                                                                      .Where(m => m.DeclaringType == controllerDescriptor.ControllerType);
-
-            if (actionSelector.AllowLegacyAsyncActions)
-            {
-                // if the ActionAsync / ActionCompleted pattern is used, we need to remove the "Completed" methods
-                // and not look up routing attributes on them
-                actionMethodsInfo =
-                    actionMethodsInfo.Where(m => !m.Name.EndsWith("Completed", StringComparison.OrdinalIgnoreCase));
-            }
+            IEnumerable<MethodInfo> actionMethodsInfo = actionSelector.DirectRouteMethods;
 
             List<RouteEntry> routeEntries = new List<RouteEntry>();
 
             foreach (var method in actionMethodsInfo)
             {
-                string actionName = GetCanonicalActionName(method, actionSelector.AllowLegacyAsyncActions);
-                IEnumerable<IDirectRouteInfoProvider> routeAttributes = GetRouteAttributes(method);
+                string actionName = actionSelector.GetActionName(method);
+                IEnumerable<IRouteInfoProvider> routeAttributes = GetRouteAttributes(method, controllerDescriptor.ControllerType);
+
+                IEnumerable<string> verbs = GetActionVerbs(method);
 
                 foreach (var routeAttribute in routeAttributes)
                 {
-                    foreach (var prefixAttribute in prefixAttributes)
-                    {
-                        string prefix = prefixAttribute != null ? prefixAttribute.Prefix : null;
-                        int prefixOrder = prefixAttribute != null ? prefixAttribute.Order : 0;
+                    ValidateTemplate(routeAttribute.Template, actionName, controllerDescriptor);
 
-                        string template = CombinePrefixAndAreaWithTemplate(areaPrefix, prefix, routeAttribute.RouteTemplate);
-                        Route route = _routeBuilder.BuildDirectRoute(template, routeAttribute.Verbs, controllerName,
-                                                                     actionName, method, areaName);
-                        RouteEntry entry = new RouteEntry
-                        {
-                            Name = routeAttribute.RouteName ?? template,
-                            Route = route,
-                            RouteTemplate = template,
-                            ParsedRoute = RouteParser.Parse(route.Url),
-                            Order = routeAttribute.RouteOrder,
-                            PrefixOrder = prefixOrder,
-                        };
-                        routeEntries.Add(entry);
-                    }
+                    string template = CombinePrefixAndAreaWithTemplate(areaPrefix, prefix, routeAttribute.Template);
+                    Route route = _routeBuilder.BuildDirectRoute(template, verbs, controllerName,
+                                                                    actionName, method, areaName);
+                    RouteEntry entry = new RouteEntry
+                    {
+                        Name = routeAttribute.Name,
+                        Route = route,
+                        Template = template,
+                        ParsedRoute = RouteParser.Parse(route.Url), 
+                        HasVerbs = verbs.Any()
+                    };
+                    routeEntries.Add(entry);                    
                 }
+            }
+
+            // Check for controller-level routes. 
+            IEnumerable<IRouteInfoProvider> controllerRouteAttributes = controllerDescriptor.GetDirectRoutes();
+            foreach (var routeAttribute in controllerRouteAttributes)
+            {               
+                string template = CombinePrefixAndAreaWithTemplate(areaPrefix, prefix, routeAttribute.Template);
+
+                Route route = _routeBuilder.BuildDirectRoute(template, controllerDescriptor);
+                RouteEntry entry = new RouteEntry
+                {
+                    Name = routeAttribute.Name,
+                    Route = route,
+                    Template = template,
+                    ParsedRoute = RouteParser.Parse(route.Url)
+                };
+                routeEntries.Add(entry);     
             }
 
             return routeEntries;
         }
 
-        private static IEnumerable<IDirectRouteInfoProvider> GetRouteAttributes(MethodInfo methodInfo)
+        private static void ValidatePrefixTemplate(string prefix, ControllerDescriptor controllerDescriptor)
         {
+            if (prefix != null && (prefix.StartsWith("/", StringComparison.Ordinal) || prefix.EndsWith("/", StringComparison.Ordinal)))
+            {
+                string errorMessage = Error.Format(MvcResources.RoutePrefix_CannotStartOrEnd_WithForwardSlash,
+                                                   prefix, controllerDescriptor.ControllerName);
+                throw new InvalidOperationException(errorMessage);
+            }
+        }
+
+        private static void ValidateAreaPrefixTemplate(string areaPrefix, string areaName, ControllerDescriptor controllerDescriptor)
+        {
+            if (areaPrefix != null && areaPrefix.EndsWith("/", StringComparison.Ordinal))
+            {
+                string errorMessage = Error.Format(MvcResources.RouteAreaPrefix_CannotEnd_WithForwardSlash,
+                                                   areaPrefix, areaName, controllerDescriptor.ControllerName);
+                throw new InvalidOperationException(errorMessage);
+            }
+        }
+
+        private static void ValidateTemplate(string routeTemplate, string actionName, ControllerDescriptor controllerDescriptor)
+        {
+            if (routeTemplate.StartsWith("/", StringComparison.Ordinal))
+            {
+                string errorMessage = Error.Format(MvcResources.RouteTemplate_CannotStart_WithForwardSlash,
+                                                   routeTemplate, actionName, controllerDescriptor.ControllerName);
+                throw new InvalidOperationException(errorMessage);
+            }
+        }
+
+        private static IEnumerable<IRouteInfoProvider> GetRouteAttributes(MethodInfo methodInfo, Type controllerType)
+        {
+            // Skip Route attributes on inherited actions.
+            if (methodInfo.DeclaringType != controllerType)
+            {
+                return Enumerable.Empty<IRouteInfoProvider>();
+            }
+
             // We do not want to cache this as these attributes are only being looked up during
             // application's init time, so there will be no perf gain, and we will end up
             // storing that cache for no reason
             return methodInfo.GetCustomAttributes(inherit: false)
-              .OfType<IDirectRouteInfoProvider>()
-              .Where(attr => attr.RouteTemplate != null)
-              .ToArray();
-        }
-
-        private static string GetAreaName(ReflectedAsyncControllerDescriptor controllerDescriptor, RouteAreaAttribute area)
-        {
-            if (area == null)
-            {
-                return null;
-            }
-
-            if (area.AreaName != null)
-            {
-                return area.AreaName;
-            }
-            if (controllerDescriptor.ControllerType.Namespace != null)
-            {
-                return controllerDescriptor.ControllerType.Namespace.Split('.').Last();
-            }
-
-            throw Error.InvalidOperation(MvcResources.AttributeRouting_CouldNotInferAreaNameFromMissingNamespace, controllerDescriptor.ControllerName);
-        }
-
-        private static RouteAreaAttribute GetAreaFrom(ReflectedAsyncControllerDescriptor controllerDescriptor)
-        {
-            RouteAreaAttribute areaAttribute =
-                controllerDescriptor.GetCustomAttributes(typeof(RouteAreaAttribute), true)
-                                    .Cast<RouteAreaAttribute>()
-                                    .FirstOrDefault();
-            return areaAttribute;
-        }
-
-        private static IEnumerable<RoutePrefixAttribute> GetPrefixsFrom(ReflectedAsyncControllerDescriptor controllerDescriptor)
-        {
-            // this only happens once per controller type, for the lifetime of the application,
-            // so we do not need to cache the results
-           return controllerDescriptor.GetCustomAttributes(typeof(RoutePrefixAttribute), false)
-                                    .Cast<RoutePrefixAttribute>();
+              .OfType<IRouteInfoProvider>()
+              .Where(attr => attr.Template != null);
         }
 
         internal static string CombinePrefixAndAreaWithTemplate(string areaPrefix, string prefix, string template)
         {
             Contract.Assert(template != null);
+
+            // If the attribute's template starts with '~/', ignore the area and controller prefixes
+            if (template.StartsWith("~/", StringComparison.Ordinal))
+            {
+                return template.Substring(2);
+            }
+
             if (prefix == null && areaPrefix == null)
             {
                 return template;
@@ -181,15 +194,42 @@ namespace System.Web.Mvc.Routing
 
             return templateBuilder.ToString();
         }
-        private static string GetCanonicalActionName(MethodInfo method, bool allowLegacyAsyncActions)
-        {
-            const string AsyncMethodSuffix = "Async";
-            if (allowLegacyAsyncActions && method.Name.EndsWith(AsyncMethodSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                return method.Name.Substring(0, method.Name.Length - AsyncMethodSuffix.Length);
-            }
 
-            return method.Name;
+        // return list of verbs on the method.
+        private static IEnumerable<string> GetActionVerbs(MethodInfo method)
+        {
+            var list = new List<string>();
+
+            IEnumerable<AcceptVerbsAttribute> verbAttributes = method.GetCustomAttributes<AcceptVerbsAttribute>();
+            foreach (AcceptVerbsAttribute verbAttribute in verbAttributes)
+            {
+                foreach (var verb in verbAttribute.Verbs)
+                {                    
+                    list.Add(verb);
+                }
+            }
+            AddActionVerbForAttribute<HttpDeleteAttribute>(method, "DELETE", list);
+            AddActionVerbForAttribute<HttpGetAttribute>(method, "GET", list);
+            AddActionVerbForAttribute<HttpHeadAttribute>(method, "HEAD", list);
+            AddActionVerbForAttribute<HttpOptionsAttribute>(method, "OPTIONS", list);
+            AddActionVerbForAttribute<HttpPatchAttribute>(method, "PATCH", list);
+            AddActionVerbForAttribute<HttpPostAttribute>(method, "POST", list);
+            AddActionVerbForAttribute<HttpPutAttribute>(method, "PUT", list);
+            return list;
+        }
+
+        private static void AddActionVerbForAttribute<T>(MethodInfo method, string verb, List<string> verbs)
+            where T : Attribute
+        {
+            if (!verbs.Any(v => String.Equals(v, verb, StringComparison.OrdinalIgnoreCase)))
+            {
+                T attribute = method.GetCustomAttribute<T>();
+
+                if (attribute != null)
+                {
+                    verbs.Add(verb);
+                }
+            }
         }
     }
 }

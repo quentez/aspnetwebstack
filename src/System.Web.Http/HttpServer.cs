@@ -6,8 +6,8 @@ using System.Net.Http;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Http.Controllers;
 using System.Web.Http.Dispatcher;
-using System.Web.Http.Hosting;
 using System.Web.Http.Properties;
 
 namespace System.Web.Http
@@ -64,6 +64,8 @@ namespace System.Web.Http
         /// </summary>
         /// <param name="configuration">The <see cref="HttpConfiguration"/> used to configure this <see cref="HttpServer"/> instance.</param>
         /// <param name="dispatcher">Http dispatcher responsible for handling incoming requests.</param>
+        [SuppressMessage("Microsoft.Performance", "CA1804:RemoveUnusedLocals", MessageId = "principal",
+            Justification = "Must access Thread.CurrentPrincipal to work around problem in .NET 4.5")]
         public HttpServer(HttpConfiguration configuration, HttpMessageHandler dispatcher)
         {
             if (configuration == null)
@@ -125,7 +127,8 @@ namespace System.Web.Http
         /// <param name="cancellationToken">The cancellation token.</param>
         /// <returns>A <see cref="Task{HttpResponseMessage}"/> representing the ongoing operation.</returns>
         [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Caller becomes owner.")]
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "we are converting exceptions to error responses.")]
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (request == null)
             {
@@ -134,7 +137,7 @@ namespace System.Web.Http
 
             if (_disposed)
             {
-                return TaskHelpers.FromResult(request.CreateErrorResponse(HttpStatusCode.ServiceUnavailable, SRResources.HttpServerDisposed));
+                return request.CreateErrorResponse(HttpStatusCode.ServiceUnavailable, SRResources.HttpServerDisposed);
             }
 
             // The first request initializes the server
@@ -144,11 +147,11 @@ namespace System.Web.Http
             SynchronizationContext context = SynchronizationContext.Current;
             if (context != null)
             {
-                request.Properties.Add(HttpPropertyKeys.SynchronizationContextKey, context);
+                request.SetSynchronizationContext(context);
             }
 
             // Add HttpConfiguration object as a parameter to the request 
-            request.Properties.Add(HttpPropertyKeys.HttpConfigurationKey, _configuration);
+            request.SetConfiguration(_configuration);
 
             // Ensure we have a principal, even if the host didn't give us one
             IPrincipal originalPrincipal = Thread.CurrentPrincipal;
@@ -157,9 +160,28 @@ namespace System.Web.Http
                 Thread.CurrentPrincipal = _anonymousPrincipal;
             }
 
+            // Ensure we have a principal on the request context (if there is a request context).
+            HttpRequestContext requestContext = request.GetRequestContext();
+
+            if (requestContext == null)
+            {
+                requestContext = new RequestBackedHttpRequestContext(request);
+
+                // if the host did not set a request context we will also set it back to the request.
+                request.SetRequestContext(requestContext);
+            }
+
             try
             {
-                return base.SendAsync(request, cancellationToken);
+                return await base.SendAsync(request, cancellationToken);
+            }
+            catch (HttpResponseException exception)
+            {
+                return exception.Response;
+            }
+            catch (Exception exception)
+            {
+                return request.CreateErrorResponse(HttpStatusCode.InternalServerError, exception);
             }
             finally
             {
@@ -187,7 +209,7 @@ namespace System.Web.Http
         {
             // Do final initialization of the configuration.
             // It is considered immutable from this point forward.
-            _configuration.Initializer(_configuration);
+            _configuration.EnsureInitialized();
 
             // Create pipeline
             InnerHandler = HttpClientFactory.CreatePipeline(_dispatcher, _configuration.MessageHandlers);

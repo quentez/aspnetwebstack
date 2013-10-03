@@ -694,6 +694,13 @@ namespace System.Web.Http.OData.Query
         }
 
         [Fact]
+        public void GetNextPageLink_ThatTakesUri_GetsNextPageLink()
+        {
+            Uri nextPageLink = ODataQueryOptions.GetNextPageLink(new Uri("http://localhost/Customers?$filter=Age ge 18"), 10);
+            Assert.Equal("http://localhost/Customers?$filter=Age%20ge%2018&$skip=10", nextPageLink.AbsoluteUri);
+        }
+
+        [Fact]
         public void CanTurnOffAllValidation()
         {
             // Arrange
@@ -855,6 +862,27 @@ namespace System.Web.Http.OData.Query
             // Assert
             Assert.Equal(nextPageLink, request.GetNextPageLink());
             Assert.Equal(1, (result as IQueryable<int>).Count());
+        }
+
+        [Fact]
+        public void ODataQueryOptions_WithUnTypedContext_CanBeBuilt()
+        {
+            // Arrange
+            CustomersModelWithInheritance model = new CustomersModelWithInheritance();
+            ODataQueryContext context = new ODataQueryContext(model.Model, model.Customer);
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get,
+                "http://localhost/?$filter=Id eq 42&$orderby=Id&$skip=42&$top=42&$inlinecount=allpages&$select=Id&$expand=Orders");
+
+            // Act
+            ODataQueryOptions queryOptions = new ODataQueryOptions(context, request);
+
+            // Assert
+            Assert.NotNull(queryOptions.Filter);
+            Assert.NotNull(queryOptions.OrderBy);
+            Assert.NotNull(queryOptions.Skip);
+            Assert.NotNull(queryOptions.Top);
+            Assert.NotNull(queryOptions.SelectExpand);
+            Assert.NotNull(queryOptions.InlineCount);
         }
     }
 

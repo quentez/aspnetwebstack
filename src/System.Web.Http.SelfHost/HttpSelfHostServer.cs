@@ -14,7 +14,9 @@ using System.ServiceModel.Channels;
 using System.ServiceModel.Security;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Http.Controllers;
 using System.Web.Http.Hosting;
+using System.Web.Http.Routing;
 using System.Web.Http.SelfHost.Channels;
 using System.Web.Http.SelfHost.Properties;
 using System.Web.Http.SelfHost.ServiceModel.Channels;
@@ -26,6 +28,8 @@ namespace System.Web.Http.SelfHost
     /// </summary>
     public sealed class HttpSelfHostServer : HttpServer
     {
+        internal const string SecurityKey = "Security";
+
         private static readonly AsyncCallback _onCloseListenerComplete = new AsyncCallback(OnCloseListenerComplete);
         private static readonly AsyncCallback _onCloseChannelComplete = new AsyncCallback(OnCloseChannelComplete);
 
@@ -177,7 +181,7 @@ namespace System.Web.Http.SelfHost
             BeginReply(new ReplyContext(channelContext, requestContext, reply));
         }
 
-        private static async Task<HttpResponseMessage> SendAsync(ChannelContext channelContext, RequestContext requestContext)
+        private async Task<HttpResponseMessage> SendAsync(ChannelContext channelContext, RequestContext requestContext)
         {
             HttpRequestMessage request = null;
             try
@@ -205,13 +209,9 @@ namespace System.Web.Http.SelfHost
             {
                 return request.CreateErrorResponse(HttpStatusCode.ServiceUnavailable, SRResources.RequestCancelled, operationCanceledException);
             }
-            catch (Exception exception)
-            {
-                return request.CreateErrorResponse(HttpStatusCode.InternalServerError, exception);
-            }
         }
 
-        private static HttpRequestMessage CreateHttpRequestMessage(RequestContext requestContext)
+        private HttpRequestMessage CreateHttpRequestMessage(RequestContext requestContext)
         {
             // Get the HTTP request from the WCF Message
             HttpRequestMessage request = requestContext.RequestMessage.ToHttpRequestMessage();
@@ -223,6 +223,13 @@ namespace System.Web.Http.SelfHost
             // create principal information and add it the request for the windows auth case
             SetCurrentPrincipal(request);
 
+            HttpRequestContext httpRequestContext = new SelfHostHttpRequestContext(requestContext, _configuration,
+                request);
+            request.SetRequestContext(httpRequestContext);
+
+            // The following two properties are set for backwards compatibility only. The request context controls the
+            // behavior for all cases except when accessing the property directly by key.
+
             // Add the retrieve client certificate delegate to the property bag to enable lookup later on
             request.Properties.Add(HttpPropertyKeys.RetrieveClientCertificateDelegateKey, _retrieveClientCertificate);
 
@@ -231,7 +238,7 @@ namespace System.Web.Http.SelfHost
             return request;
         }
 
-        private static bool IsLocal(Message message)
+        internal static bool IsLocal(Message message)
         {
             RemoteEndpointMessageProperty remoteEndpointProperty;
             if (message.Properties.TryGetValue(RemoteEndpointMessageProperty.Name, out remoteEndpointProperty))
@@ -263,7 +270,7 @@ namespace System.Web.Http.SelfHost
             }
         }
 
-        private static X509Certificate2 RetrieveClientCertificate(HttpRequestMessage request)
+        internal static X509Certificate2 RetrieveClientCertificate(HttpRequestMessage request)
         {
             if (request == null)
             {

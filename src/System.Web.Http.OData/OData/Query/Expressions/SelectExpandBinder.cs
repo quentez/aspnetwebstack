@@ -69,7 +69,6 @@ namespace System.Web.Http.OData.Query.Expressions
         private IQueryable Bind(IQueryable queryable)
         {
             Type elementType = _selectExpandQuery.Context.ElementClrType;
-            ParameterExpression source = Expression.Parameter(elementType);
 
             LambdaExpression projectionLambda = GetProjectionLambda();
 
@@ -152,8 +151,6 @@ namespace System.Web.Http.OData.Query.Expressions
             IEdmEntityType declaringType = property.DeclaringType as IEdmEntityType;
             Contract.Assert(declaringType != null, "only entity types are projected.");
 
-            Expression propertyValue;
-
             // derived property using cast
             if (elementType != declaringType)
             {
@@ -163,30 +160,10 @@ namespace System.Web.Http.OData.Query.Expressions
                     throw new ODataException(Error.Format(SRResources.MappingDoesNotContainEntityType, declaringType.FullName()));
                 }
 
-                // Expression
-                //          source is propertyDeclaringType ? (source as propertyDeclaringType).propertyName : null
-                Expression derivedPropertyAccess = Expression.Property(Expression.TypeAs(source, castType), property.Name);
+                source = Expression.TypeAs(source, castType);
+            }
 
-                if (_settings.HandleNullPropagation == HandleNullPropagationOption.True)
-                {
-                    propertyValue =
-                        Expression.Condition(
-                            Expression.TypeIs(source, castType),
-                            derivedPropertyAccess,
-                                ExpressionHelpers.Default(derivedPropertyAccess.Type));
-                }
-                else
-                {
-                    // need to cast this to nullable as EF would fail while materializing if the property is not nullable and is not present.
-                    propertyValue = ExpressionHelpers.ToNullable(derivedPropertyAccess);
-                }
-            }
-            else
-            {
-                // Expression
-                //      source.PropertyName
-                propertyValue = Expression.Property(source, property.Name);
-            }
+            Expression propertyValue = Expression.Property(source, property.Name);
 
             if (_settings.HandleNullPropagation == HandleNullPropagationOption.True)
             {
@@ -195,6 +172,11 @@ namespace System.Web.Http.OData.Query.Expressions
                         test: Expression.Equal(source, Expression.Constant(null)),
                         ifTrue: Expression.Constant(null, propertyValue.Type.ToNullable()),
                         ifFalse: ExpressionHelpers.ToNullable(propertyValue));
+            }
+            else
+            {
+                // need to cast this to nullable as EF would fail while materializing if the property is not nullable and source is null.
+                propertyValue = ExpressionHelpers.ToNullable(propertyValue);
             }
 
             return propertyValue;
@@ -206,10 +188,14 @@ namespace System.Web.Http.OData.Query.Expressions
         {
             Contract.Assert(source != null);
 
-            Type wrapperType = typeof(SelectExpandWrapper<>).MakeGenericType(source.Type);
+            Type elementType = source.Type;
+            Type wrapperType = typeof(SelectExpandWrapper<>).MakeGenericType(elementType);
             List<MemberAssignment> wrapperTypeMemberAssignments = new List<MemberAssignment>();
 
             PropertyInfo wrapperProperty;
+            bool isInstancePropertySet = false;
+            bool isTypeNamePropertySet = false;
+            bool isContainerPropertySet = false;
 
             // Initialize property 'ModelID' on the wrapper class.
             // source = new Wrapper { ModelID = 'some-guid-id' }
@@ -223,6 +209,7 @@ namespace System.Web.Http.OData.Query.Expressions
                 wrapperProperty = wrapperType.GetProperty("Instance");
                 Contract.Assert(wrapperProperty != null);
                 wrapperTypeMemberAssignments.Add(Expression.Bind(wrapperProperty, source));
+                isInstancePropertySet = true;
             }
             else
             {
@@ -233,6 +220,7 @@ namespace System.Web.Http.OData.Query.Expressions
                     wrapperProperty = wrapperType.GetProperty("TypeName");
                     Contract.Assert(wrapperProperty != null);
                     wrapperTypeMemberAssignments.Add(Expression.Bind(wrapperProperty, typeName));
+                    isTypeNamePropertySet = true;
                 }
             }
 
@@ -253,9 +241,12 @@ namespace System.Web.Http.OData.Query.Expressions
                         BuildPropertyContainer(entityType, source, propertiesToExpand, propertiesToInclude, autoSelectedProperties);
 
                     wrapperTypeMemberAssignments.Add(Expression.Bind(wrapperProperty, propertyContainerCreation));
+                    isContainerPropertySet = true;
                 }
             }
 
+            Type wrapperGenericType = GetWrapperGenericType(isInstancePropertySet, isTypeNamePropertySet, isContainerPropertySet);
+            wrapperType = wrapperGenericType.MakeGenericType(elementType);
             return Expression.MemberInit(Expression.New(wrapperType), wrapperTypeMemberAssignments);
         }
 
@@ -272,6 +263,7 @@ namespace System.Web.Http.OData.Query.Expressions
 
                 Expression propertyName = CreatePropertyNameExpression(elementType, propertyToExpand, source);
                 Expression propertyValue = CreatePropertyValueExpression(elementType, propertyToExpand, source);
+                Expression nullCheck = Expression.Equal(propertyValue, Expression.Constant(null));
 
                 // projection can be null if the expanded navigation property is not further projected or expanded.
                 if (projection != null)
@@ -279,21 +271,34 @@ namespace System.Web.Http.OData.Query.Expressions
                     propertyValue = ProjectAsWrapper(propertyValue, projection, propertyToExpand.ToEntityType());
                 }
 
-                includedProperties.Add(new NamedPropertyExpression(propertyName, propertyValue, autoSelected: false));
+                NamedPropertyExpression propertyExpression = new NamedPropertyExpression(propertyName, propertyValue);
+                if (projection != null)
+                {
+                    if (!propertyToExpand.Type.IsCollection())
+                    {
+                        propertyExpression.NullCheck = nullCheck;
+                    }
+                    else if (_settings.PageSize != null)
+                    {
+                        propertyExpression.PageSize = _settings.PageSize.Value;
+                    }
+                }
+
+                includedProperties.Add(propertyExpression);
             }
 
             foreach (IEdmStructuralProperty propertyToInclude in propertiesToInclude)
             {
                 Expression propertyName = CreatePropertyNameExpression(elementType, propertyToInclude, source);
                 Expression propertyValue = CreatePropertyValueExpression(elementType, propertyToInclude, source);
-                includedProperties.Add(new NamedPropertyExpression(propertyName, propertyValue, autoSelected: false));
+                includedProperties.Add(new NamedPropertyExpression(propertyName, propertyValue));
             }
 
             foreach (IEdmStructuralProperty propertyToInclude in autoSelectedProperties)
             {
                 Expression propertyName = CreatePropertyNameExpression(elementType, propertyToInclude, source);
                 Expression propertyValue = CreatePropertyValueExpression(elementType, propertyToInclude, source);
-                includedProperties.Add(new NamedPropertyExpression(propertyName, propertyValue, autoSelected: true));
+                includedProperties.Add(new NamedPropertyExpression(propertyName, propertyValue) { AutoSelected = true });
             }
 
             // create a property container that holds all these property names and values.
@@ -313,9 +318,16 @@ namespace System.Web.Http.OData.Query.Expressions
             //      (ElementType element) => new Wrapper { }
             LambdaExpression selector = Expression.Lambda(projection, element);
 
+            if (_settings.PageSize != null && _settings.PageSize.HasValue)
+            {
+                // nested paging. Take one more than page size as we need to know whether the collection
+                // was truncated or not while generating next page links.
+                source = ExpressionHelpers.Take(source, _settings.PageSize.Value + 1, elementType, _settings.EnableConstantParameterization);
+            }
+
             // expression
             //      source.Select((ElementType element) => new Wrapper { })
-            Expression selectedExpresion = Expression.Call(GetSelectMethod(elementType), source, selector);
+            Expression selectedExpresion = Expression.Call(GetSelectMethod(elementType, projection.Type), source, selector);
 
             if (_settings.HandleNullPropagation == HandleNullPropagationOption.True)
             {
@@ -404,11 +416,9 @@ namespace System.Web.Http.OData.Query.Expressions
             return -1;
         }
 
-        private static MethodInfo GetSelectMethod(Type elementType)
+        private static MethodInfo GetSelectMethod(Type elementType, Type resultType)
         {
-            Type selectTSource = elementType;
-            Type selectTResult = typeof(SelectExpandWrapper<>).MakeGenericType(elementType);
-            return ExpressionHelperMethods.EnumerableSelectGeneric.MakeGenericMethod(selectTSource, selectTResult);
+            return ExpressionHelperMethods.EnumerableSelectGeneric.MakeGenericMethod(elementType, resultType);
         }
 
         private static Dictionary<IEdmNavigationProperty, SelectExpandClause> GetPropertiesToExpandInQuery(SelectExpandClause selectExpandClause)
@@ -441,7 +451,7 @@ namespace System.Web.Http.OData.Query.Expressions
             HashSet<IEdmStructuralProperty> propertiesToInclude = new HashSet<IEdmStructuralProperty>();
 
             IEnumerable<SelectItem> selectedItems = selectExpandClause.SelectedItems;
-            if (!selectedItems.OfType<WildcardSelectItem>().Any())
+            if (!IsSelectAll(selectExpandClause))
             {
                 // only select requested properties and keys.
                 foreach (PathSelectItem pathSelectItem in selectedItems.OfType<PathSelectItem>())
@@ -480,6 +490,50 @@ namespace System.Web.Http.OData.Query.Expressions
             }
 
             return false;
+        }
+
+        private static Type GetWrapperGenericType(bool isInstancePropertySet, bool isTypeNamePropertySet, bool isContainerPropertySet)
+        {
+            if (isInstancePropertySet)
+            {
+                // select all
+                Contract.Assert(!isTypeNamePropertySet, "we don't set type name if we set instance as it can be figured from instance");
+
+                return isContainerPropertySet ? typeof(SelectAllAndExpand<>) : typeof(SelectAll<>);
+            }
+            else
+            {
+                Contract.Assert(isContainerPropertySet, "if it is not select all, container should hold something");
+
+                return isTypeNamePropertySet ? typeof(SelectSomeAndInheritance<>) : typeof(SelectSome<>);
+            }
+        }
+
+        /* Entityframework requires that the two different type initializers for a given type in the same query have the 
+        same set of properties in the same order.
+        
+        A ~/People?$select=Name&$expand=Friend results in a select expression that has two SelectExpandWrapper<Person>
+        expressions, one for the root level person and the second for the expanded Friend person.
+        The first wrapper has the Container property set (contains Name and Friend values) where as the second wrapper
+        has the Instance property set as it contains all the properties of the expanded person.
+        
+        The below four classes workaround that entity framework limitation by defining a seperate type for each
+        property selection combination possible. */
+
+        private class SelectAllAndExpand<TEntity> : SelectExpandWrapper<TEntity>
+        {
+        }
+
+        private class SelectAll<TEntity> : SelectExpandWrapper<TEntity>
+        {
+        }
+
+        private class SelectSomeAndInheritance<TEntity> : SelectExpandWrapper<TEntity>
+        {
+        }
+
+        private class SelectSome<TEntity> : SelectAllAndExpand<TEntity>
+        {
         }
     }
 }

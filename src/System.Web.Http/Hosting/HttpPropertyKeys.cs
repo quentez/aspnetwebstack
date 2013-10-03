@@ -2,6 +2,7 @@
 
 using System.Net.Http;
 using System.Threading;
+using System.Web.Http.Controllers;
 using System.Web.Http.Routing;
 
 namespace System.Web.Http.Hosting
@@ -20,11 +21,6 @@ namespace System.Web.Http.Hosting
         /// Provides a key for the <see cref="IHttpRouteData"/> associated with this request.
         /// </summary>
         public static readonly string HttpRouteDataKey = "MS_HttpRouteData";
-
-        /// <summary>
-        /// Provides a key for the <see cref="UrlHelper"/> instance associated with this request.
-        /// </summary>
-        public static readonly string UrlHelperKey = "MS_UrlHelper";
 
         /// <summary>
         /// Provides a key for the <see cref="System.Web.Http.Controllers.HttpActionDescriptor"/> associated with this request.
@@ -58,6 +54,11 @@ namespace System.Web.Http.Hosting
         public static readonly string RetrieveClientCertificateDelegateKey = "MS_RetrieveClientCertificateDelegate";
 
         /// <summary>
+        /// Provides a key for the <see cref="HttpRequestContext"/> for this request.
+        /// </summary>
+        public static readonly string RequestContextKey = "MS_RequestContext";
+
+        /// <summary>
         /// Provides a key for the <see cref="Guid"/> stored in <see cref="HttpRequestMessage.Properties"/>.
         /// This is the correlation id for that request.
         /// </summary>
@@ -74,11 +75,6 @@ namespace System.Web.Http.Hosting
         public static readonly string NoRouteMatched = "MS_NoRouteMatched";
 
         /// <summary>
-        /// Provides a key for the root virtual path for a request.
-        /// </summary>
-        public static readonly string VirtualPathRoot = "MS_VirtualPathRoot";
-
-        /// <summary>
         /// Provides a key that indicates whether error details are to be included in the response for this HTTP request.
         /// </summary>
         public static readonly string IncludeErrorDetailKey = "MS_IncludeErrorDetail";
@@ -87,12 +83,6 @@ namespace System.Web.Http.Hosting
         /// Provides a key for the parsed query string stored in <see cref="HttpRequestMessage.Properties"/>.
         /// </summary>
         public static readonly string RequestQueryNameValuePairsKey = "MS_QueryNameValuePairs";
-
-        /// <summary>
-        /// Provides a key that indicates whether a custom route threw a <see cref="HttpResponseException"/>. The value corresponds to the
-        /// response message from <see cref="HttpResponseException.Response"/>.
-        /// </summary>
-        public static readonly string RoutingErrorResponseKey = "MS_RoutingError";
 
         /// <summary>
         /// Provides a key that indicates whether the request is a batch request.

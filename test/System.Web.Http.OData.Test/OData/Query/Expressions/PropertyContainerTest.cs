@@ -35,7 +35,7 @@ namespace System.Web.Http.OData.Query.Expressions
             // Arrange
             Expression propertyName = Expression.Constant("PropertyName");
             Expression propertyValue = Expression.Constant(42);
-            var properties = new[] { new NamedPropertyExpression(propertyName, propertyValue, autoSelected: true) };
+            var properties = new[] { new NamedPropertyExpression(propertyName, propertyValue) { AutoSelected = true } };
 
             // Act
             Expression containerExpression = PropertyContainer.CreatePropertyContainer(properties);
@@ -47,6 +47,88 @@ namespace System.Web.Http.OData.Query.Expressions
 
             dict = container.ToDictionary(includeAutoSelected: false);
             Assert.DoesNotContain("PropertyName", dict.Keys);
+        }
+
+        [Fact]
+        public void CreatePropertyContainer_WithNullCheckTrue_PropertyIsNull()
+        {
+            // Arrange
+            string propertyName = "PropertyName";
+            Expression propertyNameExpression = Expression.Constant(propertyName);
+            Expression propertyValueExpression = Expression.Constant(42);
+            Expression nullCheckExpression = Expression.Constant(true);
+            var properties = new[] { new NamedPropertyExpression(propertyNameExpression, propertyValueExpression) { NullCheck = nullCheckExpression } };
+
+            // Act
+            Expression containerExpression = PropertyContainer.CreatePropertyContainer(properties);
+
+            // Assert
+            PropertyContainer container = ToContainer(containerExpression);
+            var dict = container.ToDictionary();
+            Assert.Contains(propertyName, dict.Keys);
+            Assert.Null(dict[propertyName]);
+        }
+
+        [Fact]
+        public void CreatePropertyContainer_WithNullCheckFalse_PropertyIsNotNull()
+        {
+            // Arrange
+            string propertyName = "PropertyName";
+            int propertyValue = 42;
+            Expression propertyNameExpression = Expression.Constant(propertyName);
+            Expression propertyValueExpression = Expression.Constant(propertyValue);
+            Expression nullCheckExpression = Expression.Constant(false);
+            var properties = new[] { new NamedPropertyExpression(propertyNameExpression, propertyValueExpression) { NullCheck = nullCheckExpression } };
+
+            // Act
+            Expression containerExpression = PropertyContainer.CreatePropertyContainer(properties);
+
+            // Assert
+            PropertyContainer container = ToContainer(containerExpression);
+            var dict = container.ToDictionary();
+            Assert.Contains(propertyName, dict.Keys);
+            Assert.Equal(propertyValue, dict[propertyName]);
+        }
+
+        [Fact]
+        public void CreatePropertyContainer_MultiplePropertiesWithNullCheck()
+        {
+            // Arrange
+            var properties = new[] 
+            { 
+                new NamedPropertyExpression(name: Expression.Constant("Prop1"), value: Expression.Constant(1)) { NullCheck = Expression.Constant(true) },
+                new NamedPropertyExpression(name: Expression.Constant("Prop2"), value: Expression.Constant(2)) { NullCheck = Expression.Constant(false) },
+            };
+
+            // Act
+            Expression containerExpression = PropertyContainer.CreatePropertyContainer(properties);
+
+            // Assert
+            PropertyContainer container = ToContainer(containerExpression);
+            var dict = container.ToDictionary();
+            Assert.Null(dict["Prop1"]);
+            Assert.Equal(2, dict["Prop2"]);
+        }
+
+        [Fact]
+        public void CreatePropertyContainer_PageSize()
+        {
+            // Arrange
+            int pageSize = 5;
+            Expression propertyName = Expression.Constant("PropertyName");
+            Expression propertyValue = Expression.Constant(Enumerable.Range(0, 10));
+            var properties = new[] { new NamedPropertyExpression(propertyName, propertyValue) { PageSize = pageSize } };
+
+            // Act
+            Expression containerExpression = PropertyContainer.CreatePropertyContainer(properties);
+
+            // Assert
+            PropertyContainer container = ToContainer(containerExpression);
+            var result = container.ToDictionary()["PropertyName"];
+            var truncatedCollection = Assert.IsType<TruncatedCollection<int>>(result);
+            Assert.True(truncatedCollection.IsTruncated);
+            Assert.Equal(pageSize, truncatedCollection.PageSize);
+            Assert.Equal(Enumerable.Range(0, pageSize), truncatedCollection);
         }
 
         [Fact]

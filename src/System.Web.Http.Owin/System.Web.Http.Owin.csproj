@@ -7,7 +7,6 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>System.Web.Http.Owin</RootNamespace>
     <AssemblyName>System.Web.Http.Owin</AssemblyName>
-    <OutputPath>..\..\bin\$(Configuration)\</OutputPath>
     <DocumentationFile>$(OutputPath)$(AssemblyName).xml</DocumentationFile>
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
@@ -16,7 +15,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Owin">
-      <HintPath>..\..\packages\Microsoft.Owin.1.1.0-beta1-20502-275\lib\net45\Microsoft.Owin.dll</HintPath>
+      <HintPath>..\..\packages\Microsoft.Owin.2.0.0-rtw2-20925-642-rel\lib\net45\Microsoft.Owin.dll</HintPath>
     </Reference>
     <Reference Include="Owin">
       <HintPath>..\..\packages\Owin.1.0\lib\net40\Owin.dll</HintPath>
@@ -47,15 +46,15 @@
     <Compile Include="..\Common\TaskHelpersExtensions.cs">
       <Link>Common\TaskHelpersExtensions.cs</Link>
     </Compile>
+    <Compile Include="HostAuthenticationAttribute.cs" />
     <Compile Include="OwinHttpConfigurationExtensions.cs" />
     <Compile Include="HostAuthenticationFilter.cs" />
     <Compile Include="OwinBufferPolicySelector.cs" />
-    <Compile Include="OwinEnvironmentExtensions.cs" />
     <Compile Include="OwinConstants.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="HttpMessageHandlerAdapter.cs" />
+    <Compile Include="OwinHttpRequestContext.cs" />
     <Compile Include="OwinHttpRequestMessageExtensions.cs" />
-    <Compile Include="OwinRequestExtensions.cs" />
     <Compile Include="PassiveAuthenticationMessageHandler.cs" />
     <Compile Include="WebApiAppBuilderExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

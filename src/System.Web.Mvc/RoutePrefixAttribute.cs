@@ -5,7 +5,7 @@ namespace System.Web.Mvc
     /// <summary>
     /// Annotates a controller with a route prefix that applies to all actions within the controller.
     /// </summary>
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = true)]
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
     public sealed class RoutePrefixAttribute : Attribute
     {
         /// <summary>
@@ -26,10 +26,5 @@ namespace System.Web.Mvc
         /// Gets the route prefix.
         /// </summary>
         public string Prefix { get; private set; }
-
-        /// <summary>
-        /// Gets or sets the order of the routes generated with this prefix relative to other prefixes. The default order is 0.
-        /// </summary>
-        public int Order { get; set; }
     }
 }

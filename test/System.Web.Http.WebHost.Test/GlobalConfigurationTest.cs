@@ -30,7 +30,6 @@ namespace System.Web.Http
         [InlineData(typeof(IAssembliesResolver), typeof(WebHostAssembliesResolver))]
         [InlineData(typeof(IHttpControllerTypeResolver), typeof(WebHostHttpControllerTypeResolver))]
         [InlineData(typeof(IHostBufferPolicySelector), typeof(WebHostBufferPolicySelector))]
-        [InlineData(typeof(IHostPrincipalService), typeof(WebHostPrincipalService))]
         public void ConfigurationService_IsWebHost(Type serviceInterfaceType, Type expectedImplementationType)
         {
             // Arrange
@@ -76,6 +75,75 @@ namespace System.Web.Http
             // Assert
             Assert.NotNull(server);
             Assert.Same(GlobalConfiguration.DefaultHandler, server.Dispatcher);
+        }
+
+        [Fact]
+        public void Configure_Throws_WhenConfigurationCallbackIsNull()
+        {
+            // Arrange
+            using (new GlobalConfigurationContext())
+            {
+                // Act & Assert
+                Assert.ThrowsArgumentNull(() => { GlobalConfiguration.Configure(null); }, "configurationCallback");
+            }
+        }
+
+        [Fact]
+        public void Configure_CallsCallbackOnceWithGlobalConfiguration()
+        {
+            // Arrange
+            using (new GlobalConfigurationContext())
+            {
+                int calls = 0;
+                HttpConfiguration configuration = null;
+                Action<HttpConfiguration> callback = (c) =>
+                {
+                    calls++;
+                    configuration = c;
+                };
+
+                // Act
+                GlobalConfiguration.Configure(callback);
+
+                // Assert
+                Assert.Equal(1, calls);
+                Assert.Same(GlobalConfiguration.Configuration, configuration);
+            }
+        }
+
+        [Fact]
+        public void Configure_CallsConfigurationEnsureInitialized()
+        {
+            // Arrange
+            using (new GlobalConfigurationContext())
+            {
+                bool initialized = false;
+                GlobalConfiguration.Configuration.Initializer = (c) =>
+                {
+                    initialized = true;
+                };
+                Action<HttpConfiguration> callback = (ignore) => { };
+
+                // Act
+                GlobalConfiguration.Configure(callback);
+
+                // Assert
+                Assert.True(initialized);
+            }
+        }
+
+        private sealed class GlobalConfigurationContext : IDisposable
+        {
+            bool disposed;
+
+            public void Dispose()
+            {
+                if (!disposed)
+                {
+                    GlobalConfiguration.Reset();
+                    disposed = true;
+                }
+            }
         }
     }
 }

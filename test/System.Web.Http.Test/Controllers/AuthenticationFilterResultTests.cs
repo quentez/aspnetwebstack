@@ -5,7 +5,6 @@ using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http.Filters;
-using System.Web.Http.Hosting;
 using Microsoft.TestCommon;
 using Moq;
 
@@ -17,12 +16,11 @@ namespace System.Web.Http.Controllers
         public void ExecuteAsync_DelegatesToInnerResult_WhenFiltersIsEmpty()
         {
             // Arrange
-            using (HttpRequestMessage request = CreateRequest())
             using (HttpResponseMessage expectedResponse = CreateResponse())
             {
                 HttpActionContext context = CreateContext();
+                ApiController controller = CreateController();
                 IAuthenticationFilter[] filters = new IAuthenticationFilter[0];
-                IHostPrincipalService principalService = CreateStubPrincipalService();
                 int calls = 0;
                 CancellationToken cancellationToken;
                 IHttpActionResult innerResult = CreateActionResult((t) =>
@@ -31,8 +29,7 @@ namespace System.Web.Http.Controllers
                     cancellationToken = t;
                     return Task.FromResult(expectedResponse);
                 });
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, request,
-                    innerResult);
+                IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
                 CancellationToken expectedCancellationToken = CreateCancellationToken();
 
                 // Act
@@ -48,36 +45,31 @@ namespace System.Web.Http.Controllers
         }
 
         [Fact]
-        public void ExecuteAsync_CallsPrincipalServiceGetCurrentPrincipal()
+        public void ExecuteAsync_CallsRequestContextPrincipalGet()
         {
             // Arrange
             HttpActionContext context = CreateContext();
+            ApiController controller = CreateController();
             IAuthenticationFilter filter = CreateStubFilter();
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter };
             int calls = 0;
-            HttpRequestMessage request = null;
-            IHostPrincipalService principalService = CreatePrincipalService((r) =>
-            {
-                calls++;
-                request = r;
-                return CreateDummyPrincipal();
-            });
+            Mock<HttpRequestContext> requestContextMock = new Mock<HttpRequestContext>();
+            requestContextMock.Setup(c => c.Principal).Callback(() =>
+                {
+                    calls++;
+                });
+            controller.RequestContext = requestContextMock.Object;
             IHttpActionResult innerResult = CreateStubActionResult();
 
-            using (HttpRequestMessage expectedRequest = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, expectedRequest,
-                    innerResult);
+            IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Equal(1, calls);
-                Assert.Same(expectedRequest, request);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Equal(1, calls);
         }
 
         [Fact]
@@ -85,6 +77,7 @@ namespace System.Web.Http.Controllers
         {
             // Arrange
             HttpActionContext expectedActionContext = CreateContext();
+            ApiController controller = CreateController();
             int calls = 0;
             HttpAuthenticationContext authenticationContext = null;
             CancellationToken cancellationToken = default(CancellationToken);
@@ -96,21 +89,20 @@ namespace System.Web.Http.Controllers
             });
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter };
             IPrincipal expectedPrincipal = CreateDummyPrincipal();
-            IHostPrincipalService principalService = CreateStubPrincipalService(expectedPrincipal);
+            Mock<HttpRequestContext> requestContextMock = new Mock<HttpRequestContext>(MockBehavior.Strict);
+            requestContextMock.Setup(c => c.Principal).Returns(expectedPrincipal);
+            controller.RequestContext = requestContextMock.Object;
             IHttpActionResult innerResult = CreateStubActionResult();
             CancellationToken expectedCancellationToken = CreateCancellationToken();
 
-            using (HttpRequestMessage request = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(expectedActionContext, filters, principalService,
-                    request, innerResult);
+            IHttpActionResult product = CreateProductUnderTest(expectedActionContext, controller, filters,
+                innerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
 
-                // Assert
-                HttpResponseMessage ignore = task.Result;
-            }
+            // Assert
+            HttpResponseMessage ignore = task.Result;
 
             Assert.Equal(1, calls);
             Assert.NotNull(authenticationContext);
@@ -125,10 +117,10 @@ namespace System.Web.Http.Controllers
         public void ExecuteAsync_DelegatesToErrorResult_WhenFilterReturnsFailure()
         {
             // Arrange
-            using (HttpRequestMessage request = CreateRequest())
             using (HttpResponseMessage expectedResponse = CreateResponse())
             {
                 HttpActionContext context = CreateContext();
+                ApiController controller = CreateController();
                 int calls = 0;
                 CancellationToken cancellationToken;
                 IHttpActionResult errorResult = CreateActionResult((t) =>
@@ -142,10 +134,8 @@ namespace System.Web.Http.Controllers
                     c.ErrorResult = errorResult;
                 });
                 IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter };
-                IHostPrincipalService principalService = CreateStubPrincipalService();
                 IHttpActionResult innerResult = CreateDummyActionResult();
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, request,
-                    innerResult);
+                IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
                 CancellationToken expectedCancellationToken = CreateCancellationToken();
 
                 // Act
@@ -164,10 +154,10 @@ namespace System.Web.Http.Controllers
         public void ExecuteAsync_DoesNotCallSecondFilterAuthenticateOrInnerResult_WhenFirstFilterReturnsFailure()
         {
             // Arrange
-            using (HttpRequestMessage request = CreateRequest())
             using (HttpResponseMessage expectedResponse = CreateResponse())
             {
                 HttpActionContext context = CreateContext();
+                ApiController controller = CreateController();
                 IHttpActionResult errorResult = CreateActionResult((t) => Task.FromResult(expectedResponse));
                 IAuthenticationFilter firstFilter = CreateAuthenticationFilter((c, t) =>
                 {
@@ -179,10 +169,8 @@ namespace System.Web.Http.Controllers
                         calls++;
                     });
                 IAuthenticationFilter[] filters = new IAuthenticationFilter[] { firstFilter, secondFilter };
-                IHostPrincipalService principalService = CreateStubPrincipalService();
                 IHttpActionResult innerResult = CreateDummyActionResult();
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, request,
-                    innerResult);
+                IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
                 CancellationToken expectedCancellationToken = CreateCancellationToken();
 
                 // Act
@@ -196,42 +184,33 @@ namespace System.Web.Http.Controllers
         }
 
         [Fact]
-        public void ExecuteAsync_CallsPrincipalServiceSetCurrentPrincipal_WhenFilterReturnsSuccess()
+        public void ExecuteAsync_UpdatesRequestContextPrincipal_WhenFilterReturnsSuccess()
         {
             // Arrange
             HttpActionContext context = CreateContext();
+            ApiController controller = CreateController();
             IPrincipal expectedPrincipal = CreateDummyPrincipal();
             IAuthenticationFilter filter = CreateAuthenticationFilter((c, t) =>
             {
                 c.Principal = expectedPrincipal;
             });
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter };
-            int calls = 0;
-            HttpRequestMessage request = null;
             IPrincipal principal = null;
-            IHostPrincipalService principalService = CreatePrincipalService((p, r) =>
+            IHttpActionResult innerResult = CreateActionResult((c) =>
             {
-                calls++;
-                request = r;
-                principal = p;
+                principal = controller.User;
+                return Task.FromResult<HttpResponseMessage>(null);
             });
-            IHttpActionResult innerResult = CreateStubActionResult();
 
-            using (HttpRequestMessage expectedRequest = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, expectedRequest,
-                    innerResult);
+            IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Equal(1, calls);
-                Assert.Same(expectedPrincipal, principal);
-                Assert.Same(expectedRequest, request);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Same(expectedPrincipal, principal);
         }
 
         [Fact]
@@ -239,6 +218,7 @@ namespace System.Web.Http.Controllers
         {
             // Arrange
             HttpActionContext context = CreateContext();
+            ApiController controller = CreateController();
             IPrincipal expectedPrincipal = CreateDummyPrincipal();
             IAuthenticationFilter firstFilter = CreateAuthenticationFilter((c, t) =>
             {
@@ -253,22 +233,17 @@ namespace System.Web.Http.Controllers
                 }
             });
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { firstFilter, secondFilter };
-            IHostPrincipalService principalService = CreateStubPrincipalService();
             IHttpActionResult innerResult = CreateStubActionResult();
 
-            using (HttpRequestMessage request = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, request,
-                    innerResult);
+            IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Same(expectedPrincipal, principal);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Same(expectedPrincipal, principal);
         }
 
         [Fact]
@@ -276,6 +251,7 @@ namespace System.Web.Http.Controllers
         {
             // Arrange
             HttpActionContext context = CreateContext();
+            ApiController controller = CreateController();
             IPrincipal principal = CreateDummyPrincipal();
             IAuthenticationFilter filter = CreateAuthenticationFilter((c, t) =>
             {
@@ -283,25 +259,22 @@ namespace System.Web.Http.Controllers
             });
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter, filter };
             int calls = 0;
-            IHostPrincipalService principalService = CreatePrincipalService((p, r) =>
-            {
-                calls++;
-            });
+            Mock<HttpRequestContext> requestContextMock = new Mock<HttpRequestContext>();
+            requestContextMock
+                .SetupSet(c => c.Principal = It.IsAny<IPrincipal>())
+                .Callback<IPrincipal>((i) => { calls++; });
+            controller.RequestContext = requestContextMock.Object;
             IHttpActionResult innerResult = CreateStubActionResult();
 
-            using (HttpRequestMessage expectedRequest = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, expectedRequest,
-                    innerResult);
+            IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Equal(1, calls);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Equal(1, calls);
         }
 
         [Fact]
@@ -309,29 +282,27 @@ namespace System.Web.Http.Controllers
         {
             // Arrange
             HttpActionContext context = CreateContext();
+            ApiController controller = CreateController();
             IPrincipal principal = CreateDummyPrincipal();
             IAuthenticationFilter filter = CreateAuthenticationFilter((c, t) => Task.FromResult<object>(null));
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter, filter };
             int calls = 0;
-            IHostPrincipalService principalService = CreatePrincipalService((p, r) =>
-            {
-                calls++;
-            });
+            Mock<HttpRequestContext> requestContextMock = new Mock<HttpRequestContext>();
+            requestContextMock
+                .SetupSet(c => c.Principal = It.IsAny<IPrincipal>())
+                .Callback<IPrincipal>((i) => { calls++; });
+            controller.RequestContext = requestContextMock.Object;
             IHttpActionResult innerResult = CreateStubActionResult();
 
-            using (HttpRequestMessage expectedRequest = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(context, filters, principalService, expectedRequest,
-                    innerResult);
+            IHttpActionResult product = CreateProductUnderTest(context, controller, filters, innerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(CancellationToken.None);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Equal(0, calls);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Equal(0, calls);
         }
 
         [Fact]
@@ -339,6 +310,7 @@ namespace System.Web.Http.Controllers
         {
             // Arrange
             HttpActionContext expectedContext = CreateContext();
+            ApiController controller = CreateController();
             int calls = 0;
             HttpActionContext context = null;
             IHttpActionResult innerResult = null;
@@ -351,26 +323,22 @@ namespace System.Web.Http.Controllers
                 cancellationToken = t;
             });
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter };
-            IHostPrincipalService principalService = CreateStubPrincipalService();
             IHttpActionResult expectedInnerResult = CreateStubActionResult();
             CancellationToken expectedCancellationToken = CreateCancellationToken();
 
-            using (HttpRequestMessage request = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(expectedContext, filters, principalService, request,
-                    expectedInnerResult);
+            IHttpActionResult product = CreateProductUnderTest(expectedContext, controller, filters,
+                expectedInnerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Equal(1, calls);
-                Assert.Same(expectedContext, context);
-                Assert.Same(expectedInnerResult, innerResult);
-                Assert.Equal(expectedCancellationToken, cancellationToken);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Equal(1, calls);
+            Assert.Same(expectedContext, context);
+            Assert.Same(expectedInnerResult, innerResult);
+            Assert.Equal(expectedCancellationToken, cancellationToken);
         }
 
         [Fact]
@@ -378,6 +346,7 @@ namespace System.Web.Http.Controllers
         {
             // Arrange
             HttpActionContext expectedContext = CreateContext();
+            ApiController controller = CreateController();
             IHttpActionResult expectedErrorResult = CreateDummyActionResult();
             int calls = 0;
             HttpActionContext context = null;
@@ -398,26 +367,22 @@ namespace System.Web.Http.Controllers
                     c.Result = CreateStubActionResult();
                 });
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { filter };
-            IHostPrincipalService principalService = CreateStubPrincipalService();
             IHttpActionResult originalInnerResult = CreateDummyActionResult();
             CancellationToken expectedCancellationToken = CreateCancellationToken();
 
-            using (HttpRequestMessage request = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(expectedContext, filters, principalService, request,
-                    originalInnerResult);
+            IHttpActionResult product = CreateProductUnderTest(expectedContext, controller, filters,
+                originalInnerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Equal(1, calls);
-                Assert.Same(expectedContext, context);
-                Assert.Same(expectedErrorResult, innerResult);
-                Assert.Equal(expectedCancellationToken, cancellationToken);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Equal(1, calls);
+            Assert.Same(expectedContext, context);
+            Assert.Same(expectedErrorResult, innerResult);
+            Assert.Equal(expectedCancellationToken, cancellationToken);
         }
 
         [Fact]
@@ -425,6 +390,7 @@ namespace System.Web.Http.Controllers
         {
             // Arrange
             HttpActionContext expectedContext = CreateContext();
+            ApiController controller = CreateController();
             IHttpActionResult expectedInnerResult = CreateDummyActionResult();
             int calls = 0;
             HttpActionContext context = null;
@@ -444,26 +410,22 @@ namespace System.Web.Http.Controllers
                 c.Result = CreateStubActionResult();
             });
             IAuthenticationFilter[] filters = new IAuthenticationFilter[] { firstFilter, secondFilter };
-            IHostPrincipalService principalService = CreateStubPrincipalService();
             IHttpActionResult originalInnerResult = CreateDummyActionResult();
             CancellationToken expectedCancellationToken = CreateCancellationToken();
 
-            using (HttpRequestMessage request = CreateRequest())
-            {
-                IHttpActionResult product = CreateProductUnderTest(expectedContext, filters, principalService, request,
-                    originalInnerResult);
+            IHttpActionResult product = CreateProductUnderTest(expectedContext, controller, filters,
+                originalInnerResult);
 
-                // Act
-                Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
+            // Act
+            Task<HttpResponseMessage> task = product.ExecuteAsync(expectedCancellationToken);
 
-                // Assert
-                Assert.NotNull(task);
-                HttpResponseMessage response = task.Result;
-                Assert.Equal(1, calls);
-                Assert.Same(expectedContext, context);
-                Assert.Same(expectedInnerResult, result);
-                Assert.Equal(expectedCancellationToken, cancellationToken);
-            }
+            // Assert
+            Assert.NotNull(task);
+            HttpResponseMessage response = task.Result;
+            Assert.Equal(1, calls);
+            Assert.Same(expectedContext, context);
+            Assert.Same(expectedInnerResult, result);
+            Assert.Equal(expectedCancellationToken, cancellationToken);
         }
 
         private static IHttpActionResult CreateActionResult(
@@ -540,6 +502,11 @@ namespace System.Web.Http.Controllers
             return new HttpActionContext();
         }
 
+        private static ApiController CreateController()
+        {
+            return new Mock<ApiController>().Object;
+        }
+
         private static IHttpActionResult CreateDummyActionResult()
         {
             return new Mock<IHttpActionResult>(MockBehavior.Strict).Object;
@@ -550,37 +517,10 @@ namespace System.Web.Http.Controllers
             return new Mock<IPrincipal>(MockBehavior.Strict).Object;
         }
 
-        private static IHostPrincipalService CreatePrincipalService(
-            Func<HttpRequestMessage, IPrincipal> getCurrentPrincipal)
-        {
-            Mock<IHostPrincipalService> mock = new Mock<IHostPrincipalService>();
-            HttpRequestMessage request = null;
-            mock.Setup(s => s.GetCurrentPrincipal(It.IsAny<HttpRequestMessage>()))
-                .Callback<HttpRequestMessage>(r => { request = r; })
-                .Returns(() => getCurrentPrincipal.Invoke(request));
-            return mock.Object;
-        }
-
-        private static IHostPrincipalService CreatePrincipalService(
-            Action<IPrincipal, HttpRequestMessage> setCurrentPrincipal)
-        {
-            Mock<IHostPrincipalService> mock = new Mock<IHostPrincipalService>();
-            mock.Setup(s => s.GetCurrentPrincipal(It.IsAny<HttpRequestMessage>())).Returns(CreateDummyPrincipal());
-            mock.Setup(s => s.SetCurrentPrincipal(It.IsAny<IPrincipal>(), It.IsAny<HttpRequestMessage>()))
-                .Callback<IPrincipal, HttpRequestMessage>((p, r) => { setCurrentPrincipal.Invoke(p, r); });
-            return mock.Object;
-        }
-
         private static AuthenticationFilterResult CreateProductUnderTest(HttpActionContext context,
-            IAuthenticationFilter[] filters, IHostPrincipalService principalService, HttpRequestMessage request,
-            IHttpActionResult innerResult)
+            ApiController controller, IAuthenticationFilter[] filters, IHttpActionResult innerResult)
         {
-            return new AuthenticationFilterResult(context, filters, principalService, request, innerResult);
-        }
-
-        private static HttpRequestMessage CreateRequest()
-        {
-            return new HttpRequestMessage();
+            return new AuthenticationFilterResult(context, controller, filters, innerResult);
         }
 
         private static HttpResponseMessage CreateResponse()
@@ -607,16 +547,10 @@ namespace System.Web.Http.Controllers
             return mock.Object;
         }
 
-        private static IHostPrincipalService CreateStubPrincipalService()
+        private static HttpRequestContext CreateStubRequestContext()
         {
-            return CreateStubPrincipalService(CreateDummyPrincipal());
-        }
-
-        private static IHostPrincipalService CreateStubPrincipalService(IPrincipal principal)
-        {
-            Mock<IHostPrincipalService> mock = new Mock<IHostPrincipalService>(MockBehavior.Strict);
-            mock.Setup(s => s.GetCurrentPrincipal(It.IsAny<HttpRequestMessage>())).Returns(principal);
-            mock.Setup(s => s.SetCurrentPrincipal(It.IsAny<IPrincipal>(), It.IsAny<HttpRequestMessage>()));
+            Mock<HttpRequestContext> mock = new Mock<HttpRequestContext>(MockBehavior.Strict);
+            mock.Setup(c => c.Principal).Returns((IPrincipal)null);
             return mock.Object;
         }
     }

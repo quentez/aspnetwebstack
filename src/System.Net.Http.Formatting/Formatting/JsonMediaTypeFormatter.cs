@@ -58,6 +58,23 @@ namespace System.Net.Http.Formatting
         }
 
         /// <summary>
+        /// Initializes a new instance of the <see cref="JsonMediaTypeFormatter"/> class.
+        /// </summary>
+        /// <param name="formatter">The <see cref="JsonMediaTypeFormatter"/> instance to copy settings from.</param>
+        protected JsonMediaTypeFormatter(JsonMediaTypeFormatter formatter)
+            : base(formatter)
+        {
+#if !NETFX_CORE // MaxDepth is not supported in portable libraries
+            MaxDepth = formatter.MaxDepth;
+#endif
+#if !NETFX_CORE // DataContractJsonSerializer is not supported in portable library
+            UseDataContractJsonSerializer = formatter.UseDataContractJsonSerializer;
+#endif
+            Indent = formatter.Indent;
+            SerializerSettings = formatter.SerializerSettings;
+        }
+
+        /// <summary>
         /// Gets the default media type for Json, namely "application/json".
         /// </summary>
         /// <remarks>
@@ -339,6 +356,9 @@ namespace System.Net.Http.Formatting
             }
         }
 
+#if NETFX_CORE
+        [SuppressMessage("Microsoft.Usage", "CA1801:ReviewUnusedParameters", Justification = "The type parameter is only used by the non-portable version of the library.")]
+#endif
         private void WriteToStream(Type type, object value, Stream writeStream, HttpContent content)
         {
             Encoding effectiveEncoding = SelectCharacterEncoding(content == null ? null : content.Headers);

@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net.Http;
 using System.Web.Http.Controllers;
-using System.Web.Http.Routing;
 
 namespace System.Web.Http
 {
@@ -13,23 +12,41 @@ namespace System.Web.Http
     /// Specifies what HTTP methods an action supports.
     /// </summary>
     [SuppressMessage("Microsoft.Design", "CA1019:DefineAccessorsForAttributeArguments", Justification = "The accessor is exposed as an Collection<HttpMethod>.")]
-    [CLSCompliant(false)]
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
-    public sealed class AcceptVerbsAttribute : Attribute, IActionHttpMethodProvider, IHttpRouteInfoProvider
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
+    public sealed class AcceptVerbsAttribute : Attribute, IActionHttpMethodProvider
     {
         private readonly Collection<HttpMethod> _httpMethods;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AcceptVerbsAttribute" /> class.        
+        /// </summary>
+        /// <param name="method">The HTTP method the action supports.</param>
+        /// <remarks>
+        /// This is a CLS compliant constructor.
+        /// </remarks>
+        public AcceptVerbsAttribute(string method)
+            : this(new string[] { method })
+        {
+        }
+        
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AcceptVerbsAttribute" /> class.
+        /// </summary>
+        /// <param name="methods">The HTTP methods the action supports.</param>
+        /// <remarks>
+        /// This constructor is not CLS-compliant.
+        /// </remarks>
+        public AcceptVerbsAttribute(params string[] methods)
+        {
+            _httpMethods = methods != null
+                                   ? new Collection<HttpMethod>(methods.Select(method => HttpMethodHelper.GetHttpMethod(method)).ToArray())
+                                   : new Collection<HttpMethod>(new HttpMethod[0]);
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AcceptVerbsAttribute" /> class.
         /// </summary>
         /// <param name="methods">The HTTP methods the action supports.</param>
-        public AcceptVerbsAttribute(params string[] methods)
-        {
-            _httpMethods = methods != null
-                       ? new Collection<HttpMethod>(methods.Select(method => HttpMethodHelper.GetHttpMethod(method)).ToArray())
-                       : new Collection<HttpMethod>(new HttpMethod[0]);
-        }
-
         internal AcceptVerbsAttribute(params HttpMethod[] methods)
         {
             _httpMethods = new Collection<HttpMethod>(methods);
@@ -45,20 +62,5 @@ namespace System.Web.Http
                 return _httpMethods;
             }
         }
-
-        /// <summary>
-        /// Gets or sets the name of the route to generate for this action.
-        /// </summary>
-        public string RouteName { get; set; }
-
-        /// <summary>
-        /// Gets or sets the order of the route relative to other routes.
-        /// </summary>
-        public int RouteOrder { get; set; }
-
-        /// <summary>
-        /// Gets or sets the route template describing the URI pattern to match against.
-        /// </summary>
-        public string RouteTemplate { get; set; }
     }
 }

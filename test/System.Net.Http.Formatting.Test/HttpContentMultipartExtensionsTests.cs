@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.TestCommon;
+using Moq;
 
 namespace System.Net.Http
 {
@@ -79,8 +80,17 @@ namespace System.Net.Http
                 Assert.Equal(DefaultContentDisposition, content.Headers.ContentDisposition.DispositionType);
                 Assert.Equal(String.Format("\"N{0}\"", cnt), content.Headers.ContentDisposition.FileName);
 
+                AssertContentLengthHeaderValue(content);
+
                 cnt++;
             }
+        }
+
+        private static void AssertContentLengthHeaderValue(HttpContent content)
+        {
+            long contentLength = content.ReadAsByteArrayAsync().Result.LongLength;
+            long contentLengthHeaderValue = content.Headers.ContentLength.GetValueOrDefault();
+            Assert.Equal(contentLength, contentLengthHeaderValue);
         }
 
         [Fact]
@@ -347,6 +357,21 @@ namespace System.Net.Http
 
             string text = content.ReadAsStringAsync().Result;
             Assert.Equal(innerText, text);
+        }
+
+        [Fact]
+        public void ReadAsMultipartAsyncOfT_PassesCancellationToken()
+        {
+            CancellationToken token = new CancellationToken();
+            HttpContent content = CreateContent("boundary");
+            Mock<MultipartStreamProvider> provider = new Mock<MultipartStreamProvider>();
+            provider.Setup(p => p.ExecutePostProcessingAsync(token))
+                .Returns(Task.FromResult(42))
+                .Verifiable();
+
+            content.ReadAsMultipartAsync<MultipartStreamProvider>(provider.Object, token).Wait();
+
+            provider.Verify();
         }
 
         public class ReadOnlyStream : MemoryStream

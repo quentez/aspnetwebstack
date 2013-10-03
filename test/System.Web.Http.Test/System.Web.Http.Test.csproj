@@ -72,6 +72,8 @@
       <Link>Common\UriQueryUtilityTest.cs</Link>
     </Compile>
     <Compile Include="AuthorizeAttributeTest.cs" />
+    <Compile Include="Batch\BatchHttpRequestMessageExtensionsTest.cs" />
+    <Compile Include="Batch\BatchHttpRequestContextTests.cs" />
     <Compile Include="Batch\HttpBatchHandlerTest.cs" />
     <Compile Include="Batch\DefaultHttpBatchHandlerTest.cs" />
     <Compile Include="Controllers\ActionFilterResultTests.cs" />
@@ -80,6 +82,8 @@
     <Compile Include="Controllers\Apis\UsersRpcController.cs" />
     <Compile Include="Controllers\AuthorizationFilterResultTests.cs" />
     <Compile Include="Controllers\AuthenticationFilterResultTests.cs" />
+    <Compile Include="Controllers\ExceptionFilterResultTests.cs" />
+    <Compile Include="Controllers\RequestBackedHttpRequestContextTests.cs" />
     <Compile Include="Controllers\FilterGroupingTests.cs" />
     <Compile Include="Controllers\HttpParameterBindingTest.cs" />
     <Compile Include="Controllers\ParameterBindingExtensionsTest.cs" />
@@ -89,16 +93,33 @@
     <Compile Include="Controllers\HttpControllerContextTest.cs" />
     <Compile Include="Controllers\HttpConfigurationTest.cs" />
     <Compile Include="Controllers\VoidResultConverterTest.cs" />
+    <Compile Include="Description\ApiExplorerTest.cs" />
     <Compile Include="Filters\HttpAuthenticationChallengeContextTests.cs" />
     <Compile Include="Filters\HttpAuthenticationContextTests.cs" />
     <Compile Include="Hosting\HttpMessageHandlerExtensions.cs" />
     <Compile Include="Hosting\SuppressHostPrincipalMessageHandlerTest.cs" />
-    <Compile Include="Hosting\ThreadCurrentPrincipalContext.cs" />
-    <Compile Include="Hosting\ThreadPrincipalServiceTest.cs" />
+    <Compile Include="Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
     <Compile Include="Results\BadRequestResultTests.cs" />
+    <Compile Include="Results\RedirectToRouteResultTests.cs" />
+    <Compile Include="Results\CreatedAtRouteNegotiatedContentResultTests.cs" />
+    <Compile Include="Results\BadRequestErrorMessageResultTests.cs" />
+    <Compile Include="Results\JsonResultTests.cs" />
+    <Compile Include="Results\ConflictResultTests.cs" />
+    <Compile Include="Results\UnauthorizedResultTests.cs" />
+    <Compile Include="Results\ExceptionResultTests.cs" />
+    <Compile Include="Results\OkResultTests.cs" />
+    <Compile Include="Results\InternalServerErrorResultTests.cs" />
+    <Compile Include="Results\NotFoundResultTests.cs" />
+    <Compile Include="Results\CreatedNegotiatedContentResultTests.cs" />
+    <Compile Include="Results\OkNegotiatedContentResultTests.cs" />
     <Compile Include="Results\InvalidModelStateResultTests.cs" />
     <Compile Include="Results\NegotiatedContentResultTests.cs" />
     <Compile Include="Results\FormattedContentResultTests.cs" />
+    <Compile Include="Results\RedirectResultTests.cs" />
     <Compile Include="Results\StatusCodeResultTests.cs" />
     <Compile Include="HttpConfigurationExtensionsTest.cs" />
     <Compile Include="Dispatcher\DefaultHttpControllerTypeResolverTest.cs" />
@@ -148,10 +169,14 @@
     <Compile Include="..\Common\Routing\RouteEntryTest.cs">
       <Link>Routing\RouteEntryTest.cs</Link>
     </Compile>
+    <Compile Include="Routing\GenerateRouteTest.cs" />
+    <Compile Include="Routing\HttpDirectRouteTest.cs" />
+    <Compile Include="Routing\HttpParsedRouteTests.cs" />
     <Compile Include="Routing\HttpRouteBuilderTest.cs" />
     <Compile Include="Routing\HttpRouteValueDictionaryTest.cs" />
     <Compile Include="Routing\HttpRouteTest.cs" />
     <Compile Include="Routing\MediaTypeFormatterExtensionsTests.cs" />
+    <Compile Include="Routing\RouteAttributeTests.cs" />
     <Compile Include="Routing\UriPathExtensionMappingTests.cs" />
     <Compile Include="Routing\UrlHelperTest.cs" />
     <Compile Include="Services\ControllerServicesTests.cs" />
@@ -289,6 +314,7 @@
     </Compile>
     <Compile Include="Validation\Providers\DataMemberModelValidatorProviderTest.cs" />
     <Compile Include="Validation\Providers\InvalidModelValidatorProviderTest.cs" />
+    <Compile Include="Validation\ReferenceEqualityComparerTest.cs" />
     <Compile Include="Validation\Validators\DataAnnotationsModelValidatorTest.cs">
       <SubType>Code</SubType>
     </Compile>
@@ -298,6 +324,7 @@
     <Compile Include="ValueProviders\Providers\QueryStringValueProviderFactoryTest.cs" />
     <Compile Include="ValueProviders\Providers\QueryStringValueProviderTest.cs" />
     <Compile Include="ValueProviders\Providers\RouteDataValueProviderTest.cs" />
+    <Compile Include="ValueProviders\ValueProviderResultTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -319,6 +346,12 @@
       <Project>{7AF77741-9158-4D5F-8782-8F21FADF025F}</Project>
       <Name>System.Net.Http.Formatting.Test</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
