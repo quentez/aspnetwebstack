@@ -115,7 +115,7 @@ namespace System.Web.Http.Routing
             }
 
             // Note: we don't validate host/port as this is expected to be done at the host level
-            string requestPath = "/" + request.RequestUri.GetComponents(UriComponents.Path, UriFormat.Unescaped);
+            string requestPath = "/" + request.RequestUri.GetComponents(UriComponents.Path, UriFormat.SafeUnescaped);
             if (!requestPath.StartsWith(virtualPathRoot, StringComparison.OrdinalIgnoreCase))
             {
                 return null;

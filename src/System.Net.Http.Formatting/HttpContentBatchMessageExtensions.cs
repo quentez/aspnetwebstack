@@ -1,12 +1,12 @@
-﻿using System;
+﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
+
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Net.Http.Formatting.Parsers;
 using System.Net.Http.Headers;
-using System.Text;
 using System.Threading.Tasks;
 using System.Web.Http;
 
@@ -62,6 +62,14 @@ namespace System.Net.Http
             }
         }
 
+        /// <summary>
+        /// Creates an <see cref="HttpRequestMessage"/> based on information provided in <see cref="HttpUnsortedRequest"/>.
+        /// </summary>
+        /// <param name="httpRequest">The unsorted HTTP request.</param>
+        /// <param name="contentStream">The input <see cref="Stream"/> used to form any <see cref="HttpContent"/> being part of this HTTP request.</param>
+        /// <param name="rewind">Start location of any request entity within the <paramref name="contentStream"/>.</param>
+        /// <returns>A newly created <see cref="HttpRequestMessage"/> instance.</returns>
+        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "caller becomes owner.")]
         private static HttpRequestMessage CreateHttpRequestMessage(HttpUnsortedRequest httpRequest, Stream contentStream, int rewind)
         {
             Contract.Assert(httpRequest != null, "httpRequest must be non null");
