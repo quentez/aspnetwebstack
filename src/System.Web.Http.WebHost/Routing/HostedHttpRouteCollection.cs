@@ -86,7 +86,8 @@ namespace System.Web.Http.WebHost.Routing
             }
 
             RouteData routeData = _routeCollection.GetRouteData(httpContextBase);
-            if (routeData != null)
+            // If the match is from an IgnoreRoute, do not return a RouteData but return a null, which will be treated as a 404 NoRouteMatched.
+            if (routeData != null && !(routeData.RouteHandler is System.Web.Routing.StopRoutingHandler))
             {
                 return new HostedHttpRouteData(routeData);
             }
@@ -148,7 +149,22 @@ namespace System.Web.Http.WebHost.Routing
         /// <inheritdoc/>
         public override IHttpRoute CreateRoute(string uriTemplate, IDictionary<string, object> defaults, IDictionary<string, object> constraints, IDictionary<string, object> dataTokens, HttpMessageHandler handler)
         {
+            if (constraints != null)
+            {
+                foreach (var constraint in constraints)
+                {
+                    ValidateConstraint(uriTemplate, constraint.Key, constraint.Value);
+                }
+            }
+
             return new HostedHttpRoute(uriTemplate, defaults, constraints, dataTokens, handler);
+        }
+
+        /// <inheritdoc/>
+        protected override void ValidateConstraint(string routeTemplate, string name, object constraint)
+        {
+            // In WebHost the constraint might be IHttpRouteConstraint or IRouteConstraint (System.Web) or a string
+            HttpWebRoute.ValidateConstraint(routeTemplate, name, constraint);
         }
 
         /// <inheritdoc/>

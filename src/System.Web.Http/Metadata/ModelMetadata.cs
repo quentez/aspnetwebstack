@@ -1,9 +1,7 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using System.Linq;
 using System.Web.Http.Internal;
 using System.Web.Http.Validation;
@@ -15,12 +13,13 @@ namespace System.Web.Http.Metadata
         private readonly Type _containerType;
         private readonly Type _modelType;
         private readonly string _propertyName;
+        private EfficientTypePropertyKey<Type, string> _cacheKey;
 
         /// <summary>
         /// Explicit backing store for the things we want initialized by default, so don't have to call
         /// the protected virtual setters of an auto-generated property.
         /// </summary>
-        private Dictionary<string, object> _additionalValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, object> _additionalValues;
         private bool _convertEmptyStringToNull = true;
         private object _model;
         private Func<object> _modelAccessor;
@@ -46,9 +45,28 @@ namespace System.Web.Http.Metadata
             _propertyName = propertyName;
         }
 
+        internal ModelMetadata(ModelMetadataProvider provider, Type containerType, Func<object> modelAccessor, Type modelType, string propertyName, EfficientTypePropertyKey<Type, string> cacheKey)
+            : this(provider, containerType, modelAccessor, modelType, propertyName)
+        {
+            if (cacheKey == null)
+            {
+                throw Error.ArgumentNull("cacheKey");
+            }
+
+            _cacheKey = cacheKey;
+        }
+
         public virtual Dictionary<string, object> AdditionalValues
         {
-            get { return _additionalValues; }
+            get
+            {
+                if (_additionalValues == null)
+                {
+                    _additionalValues = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                }
+
+                return _additionalValues;
+            }
         }
 
         public Type ContainerType
@@ -140,6 +158,19 @@ namespace System.Web.Http.Metadata
             }
         }
 
+        internal EfficientTypePropertyKey<Type, string> CacheKey
+        {
+            get
+            {
+                if (_cacheKey == null)
+                {
+                    _cacheKey = CreateCacheKey(ContainerType, ModelType, PropertyName);
+                }
+
+                return _cacheKey;
+            }
+        }
+
         [SuppressMessage("Microsoft.Design", "CA1024:UsePropertiesWhereAppropriate", Justification = "The method is a delegating helper to choose among multiple property values")]
         public virtual string GetDisplayName()
         {
@@ -154,6 +185,13 @@ namespace System.Web.Http.Metadata
             }
 
             return validatorProviders.SelectMany(provider => provider.GetValidators(this, validatorProviders));
+        }
+
+        private static EfficientTypePropertyKey<Type, string> CreateCacheKey(Type containerType, Type modelType, string propertyName)
+        {
+            // If metadata is for a property then containerType != null && propertyName != null
+            // If metadata is for a type then containerType == null && propertyName == null, so we have to use modelType for the cache key.
+            return new EfficientTypePropertyKey<Type, string>(containerType ?? modelType, propertyName);
         }
     }
 }

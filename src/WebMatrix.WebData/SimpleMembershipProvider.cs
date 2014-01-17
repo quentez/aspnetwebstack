@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Configuration.Provider;
 using System.Diagnostics;
 using System.Globalization;
@@ -23,6 +24,7 @@ namespace WebMatrix.WebData
     {
         private const int TokenSizeInBytes = 16;
         private readonly MembershipProvider _previousProvider;
+        private SimpleMembershipProviderCasingBehavior _casingBehavior;
 
         public SimpleMembershipProvider()
             : this(null)
@@ -157,7 +159,7 @@ namespace WebMatrix.WebData
             get { return "webpages_OAuthMembership"; }
         }
 
-        internal static string OAuthTokenTableName 
+        internal static string OAuthTokenTableName
         {
             get { return "webpages_OAuthToken"; }
         }
@@ -186,6 +188,30 @@ namespace WebMatrix.WebData
         // Represents the User created id column, i.e. ID;
         // REVIEW: we could get this from the primary key of UserTable in the future
         public string UserIdColumn { get; set; }
+
+        /// <summary>
+        /// Gets or sets the <see cref="WebMatrix.WebData.SimpleMembershipProviderCasingBehavior"/> for this provider.
+        /// </summary>
+        /// <remarks>
+        /// This value configures whether or not queries for user names normalize the user name to uppercase. See
+        /// <see cref="WebMatrix.WebData.SimpleMembershipProviderCasingBehavior"/> for a full description.
+        /// </remarks>
+        public SimpleMembershipProviderCasingBehavior CasingBehavior
+        {
+            get
+            {
+                return _casingBehavior;
+            }
+            set
+            {
+                if (value < SimpleMembershipProviderCasingBehavior.NormalizeCasing || value > SimpleMembershipProviderCasingBehavior.RelyOnDatabaseCollation)
+                {
+                    throw new InvalidEnumArgumentException("value", (int)value, typeof(SimpleMembershipProviderCasingBehavior));
+                }
+
+                _casingBehavior = value;
+            }
+        }
 
         internal DatabaseConnectionInfo ConnectionInfo { get; set; }
         internal bool InitializeCalled { get; set; }
@@ -297,15 +323,42 @@ namespace WebMatrix.WebData
             VerifyInitialized();
             using (var db = ConnectToDatabase())
             {
-                return GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+                return GetUserId(db, userName);
             }
         }
 
-        internal static int GetUserId(IDatabase db, string userTableName, string userNameColumn, string userIdColumn, string userName)
+        private int GetUserId(IDatabase db, string userName)
         {
-            // Casing is normalized in Sql to allow the database to normalize username according to its collation. The common issue 
-            // that can occur here is the 'Turkish i problem', where the uppercase of 'i' is not 'I' in Turkish.
-            var result = db.QueryValue(@"SELECT " + userIdColumn + " FROM " + userTableName + " WHERE (UPPER(" + userNameColumn + ") = UPPER(@0))", userName);
+            return GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, CasingBehavior, userName);
+        }
+
+        internal static int GetUserId(
+            IDatabase db,
+            string userTableName,
+            string userNameColumn,
+            string userIdColumn,
+            SimpleMembershipProviderCasingBehavior casingBehavior,
+            string userName)
+        {
+            dynamic result;
+            if (casingBehavior == SimpleMembershipProviderCasingBehavior.NormalizeCasing)
+            {
+                // Casing is normalized in Sql to allow the database to normalize username according to its collation. The common issue 
+                // that can occur here is the 'Turkish i problem', where the uppercase of 'i' is not 'I' in Turkish.
+                result = db.QueryValue(@"SELECT " + userIdColumn + " FROM " + userTableName + " WHERE (UPPER(" + userNameColumn + ") = UPPER(@0))", userName);
+            }
+            else if (casingBehavior == SimpleMembershipProviderCasingBehavior.RelyOnDatabaseCollation)
+            {
+                // When this option is supplied we assume the database has been configured with an appropriate casing, and don't normalize 
+                // the user name. This is performant but requires appropriate configuration on the database.
+                result = db.QueryValue(@"SELECT " + userIdColumn + " FROM " + userTableName + " WHERE (" + userNameColumn + " = @0)", userName);
+            }
+            else
+            {
+                Debug.Fail("Unexpected enum value");
+                return -1;
+            }
+
             if (result != null)
             {
                 return (int)result;
@@ -429,7 +482,7 @@ namespace WebMatrix.WebData
             using (var db = ConnectToDatabase())
             {
                 // Step 1: Check if the user exists in the Users table
-                int uid = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+                int uid = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, CasingBehavior, userName);
                 if (uid == -1)
                 {
                     // User not found
@@ -476,7 +529,7 @@ namespace WebMatrix.WebData
         private void CreateUserRow(IDatabase db, string userName, IDictionary<string, object> values)
         {
             // Make sure user doesn't exist
-            int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+            int userId = GetUserId(db, userName);
             if (userId != -1)
             {
                 throw new MembershipCreateUserException(MembershipCreateStatus.DuplicateUserName);
@@ -575,7 +628,7 @@ namespace WebMatrix.WebData
 
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, username);
+                int userId = GetUserId(db, username);
                 if (userId == -1)
                 {
                     return false; // User not found
@@ -622,7 +675,7 @@ namespace WebMatrix.WebData
             // Due to a bug in v1, GetUser allows passing null / empty values.
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, username);
+                int userId = GetUserId(db, username);
                 if (userId == -1)
                 {
                     return null; // User not found
@@ -649,7 +702,7 @@ namespace WebMatrix.WebData
 
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+                int userId = GetUserId(db, userName);
                 if (userId == -1)
                 {
                     return false; // User not found
@@ -670,7 +723,7 @@ namespace WebMatrix.WebData
 
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, username);
+                int userId = GetUserId(db, username);
                 if (userId == -1)
                 {
                     return false; // User not found
@@ -746,7 +799,7 @@ namespace WebMatrix.WebData
         {
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+                int userId = GetUserId(db, userName);
                 if (userId == -1)
                 {
                     throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, WebDataResources.Security_NoUserFound, userName));
@@ -761,7 +814,7 @@ namespace WebMatrix.WebData
         {
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+                int userId = GetUserId(db, userName);
                 if (userId == -1)
                 {
                     throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, WebDataResources.Security_NoUserFound, userName));
@@ -781,7 +834,7 @@ namespace WebMatrix.WebData
         {
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+                int userId = GetUserId(db, userName);
                 if (userId == -1)
                 {
                     throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, WebDataResources.Security_NoUserFound, userName));
@@ -801,7 +854,7 @@ namespace WebMatrix.WebData
         {
             using (var db = ConnectToDatabase())
             {
-                int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, userName);
+                int userId = GetUserId(db, userName);
                 if (userId == -1)
                 {
                     throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, WebDataResources.Security_NoUserFound, userName));
@@ -852,7 +905,7 @@ namespace WebMatrix.WebData
         // Ensures the user exists in the accounts table
         private int VerifyUserNameHasConfirmedAccount(IDatabase db, string username, bool throwException)
         {
-            int userId = GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, username);
+            int userId = GetUserId(db, username);
             if (userId == -1)
             {
                 if (throwException)
@@ -1004,7 +1057,7 @@ namespace WebMatrix.WebData
                 // GetUser will fail with an exception if the user table isn't set up properly
                 try
                 {
-                    GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, "z");
+                    GetUserId(db, "z");
                 }
                 catch (Exception e)
                 {
@@ -1255,7 +1308,7 @@ namespace WebMatrix.WebData
             {
                 dynamic id = db.QueryValue(@"SELECT UserId FROM [" + MembershipTableName + "] WHERE UserId=@0", userId);
                 return id != null;
-            }           
+            }
         }
     }
 }

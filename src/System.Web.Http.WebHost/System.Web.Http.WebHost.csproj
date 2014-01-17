@@ -12,7 +12,6 @@
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
     <DefineConstants>$(DefineConstants);ASPNETMVC</DefineConstants>
     <NoWarn>1591</NoWarn>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>false</SignAssembly>
@@ -39,12 +38,20 @@
     <Compile Include="..\Common\HttpMethodHelper.cs">
       <Link>Common\HttpMethodHelper.cs</Link>
     </Compile>
+    <Compile Include="..\Common\NonOwnedStream.cs">
+      <Link>Common\NonOwnedStream.cs</Link>
+    </Compile>
     <Compile Include="..\Common\TaskHelpers.cs">
       <Link>Common\TaskHelpers.cs</Link>
     </Compile>
     <Compile Include="..\Common\TaskHelpersExtensions.cs">
       <Link>Common\TaskHelpersExtensions.cs</Link>
     </Compile>
+    <Compile Include="HttpResponseBaseExtensions.cs" />
+    <Compile Include="Routing\HttpRouteExceptionHandler.cs" />
+    <Compile Include="Routing\HttpRouteExceptionRouteHandler.cs" />
+    <Compile Include="SeekableBufferedRequestStream.cs" />
+    <Compile Include="WebHostExceptionCatchBlocks.cs" />
     <Compile Include="HttpBatchContextWrapper.cs" />
     <Compile Include="HttpRequestMessageExtensions.cs" />
     <Compile Include="Routing\HttpRequestMessageWrapper.cs" />
@@ -53,6 +60,7 @@
     <Compile Include="PreApplicationStartCode.cs" />
     <Compile Include="HttpControllerTypeCacheSerializer.cs" />
     <Compile Include="Routing\HttpContextBaseExtensions.cs" />
+    <Compile Include="WebHostExceptionHandler.cs" />
     <Compile Include="WebHostHttpControllerTypeResolver.cs" />
     <Compile Include="Routing\HostedHttpRouteCollection.cs" />
     <Compile Include="Routing\HostedHttpRoute.cs" />
@@ -126,5 +134,4 @@
     </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
 </Project>

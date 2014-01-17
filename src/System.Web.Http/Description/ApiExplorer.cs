@@ -3,10 +3,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.Contracts;
 using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Formatting;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Web.Http.Controllers;
 using System.Web.Http.Dispatcher;
@@ -23,8 +25,8 @@ namespace System.Web.Http.Description
     {
         private Lazy<Collection<ApiDescription>> _apiDescriptions;
         private readonly HttpConfiguration _config;
-        private static readonly Regex _actionVariableRegex = new Regex(String.Format(CultureInfo.CurrentCulture, "{{{0}}}", RouteKeys.ActionKey), RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        private static readonly Regex _controllerVariableRegex = new Regex(String.Format(CultureInfo.CurrentCulture, "{{{0}}}", RouteKeys.ControllerKey), RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex _actionVariableRegex = new Regex(String.Format(CultureInfo.CurrentCulture, "{{{0}}}", RouteValueKeys.Action), RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        private static readonly Regex _controllerVariableRegex = new Regex(String.Format(CultureInfo.CurrentCulture, "{{{0}}}", RouteValueKeys.Controller), RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ApiExplorer"/> class.
@@ -76,7 +78,7 @@ namespace System.Web.Http.Description
 
             ApiExplorerSettingsAttribute setting = controllerDescriptor.GetCustomAttributes<ApiExplorerSettingsAttribute>().FirstOrDefault();
             return (setting == null || !setting.IgnoreApi) &&
-                MatchRegexConstraint(route, RouteKeys.ControllerKey, controllerVariableValue);
+                MatchRegexConstraint(route, RouteValueKeys.Controller, controllerVariableValue);
         }
 
         /// <summary>
@@ -100,7 +102,7 @@ namespace System.Web.Http.Description
 
             ApiExplorerSettingsAttribute setting = actionDescriptor.GetCustomAttributes<ApiExplorerSettingsAttribute>().FirstOrDefault();
             return (setting == null || !setting.IgnoreApi) &&
-                MatchRegexConstraint(route, RouteKeys.ActionKey, actionVariableValue);
+                MatchRegexConstraint(route, RouteValueKeys.Action, actionVariableValue);
         }
 
         /// <summary>
@@ -226,7 +228,7 @@ namespace System.Web.Http.Description
             {
                 foreach (CandidateAction action in candidates)
                 {
-                    ReflectedHttpActionDescriptor actionDescriptor = action.ActionDescriptor;
+                    HttpActionDescriptor actionDescriptor = action.ActionDescriptor;
                     string actionName = actionDescriptor.ActionName;
 
                     if (ShouldExploreAction(actionName, actionDescriptor, route))
@@ -266,7 +268,7 @@ namespace System.Web.Http.Description
                     }
                 }
             }
-            else if (route.Defaults.TryGetValue(RouteKeys.ControllerKey, out controllerVariableValue))
+            else if (route.Defaults.TryGetValue(RouteValueKeys.Controller, out controllerVariableValue))
             {
                 // bound controller variable, {controller = "controllerName"}
                 HttpControllerDescriptor controllerDescriptor;
@@ -282,7 +284,7 @@ namespace System.Web.Http.Description
         private void ExploreRouteActions(IHttpRoute route, string localPath, HttpControllerDescriptor controllerDescriptor, Collection<ApiDescription> apiDescriptions)
         {
             // exclude controllers that are marked with route attributes.
-            if (!controllerDescriptor.GetCustomAttributes<IHttpRouteInfoProvider>(inherit: false).Any())
+            if (!controllerDescriptor.HasRoutingAttribute())
             {
                 ServicesContainer controllerServices = controllerDescriptor.Configuration.Services;
                 ILookup<string, HttpActionDescriptor> actionMappings = controllerServices.GetActionSelector().GetActionMapping(controllerDescriptor);
@@ -300,7 +302,7 @@ namespace System.Web.Http.Description
                             PopulateActionDescriptions(actionMapping, actionVariableValue, route, expandedLocalPath, apiDescriptions, controllerDescriptor);
                         }
                     }
-                    else if (route.Defaults.TryGetValue(RouteKeys.ActionKey, out actionVariableValue))
+                    else if (route.Defaults.TryGetValue(RouteValueKeys.Action, out actionVariableValue))
                     {
                         // bound action variable, { action = "actionName" }
                         PopulateActionDescriptions(actionMappings[actionVariableValue], actionVariableValue, route, localPath, apiDescriptions, controllerDescriptor);
@@ -326,7 +328,7 @@ namespace System.Web.Http.Description
                     ReflectedHttpActionDescriptor reflectedAction = actionDescriptor as ReflectedHttpActionDescriptor;
 
                     // exclude actions that are marked with route attributes except for the inherited actions.
-                    if (!actionDescriptor.GetCustomAttributes<IHttpRouteInfoProvider>(inherit: false).Any() ||
+                    if (!actionDescriptor.HasRoutingAttribute() ||
                         (reflectedAction != null && reflectedAction.MethodInfo.DeclaringType != controllerDescriptor.ControllerType))
                     {
                         PopulateActionDescriptions(actionDescriptor, route, localPath, apiDescriptions);
@@ -339,7 +341,7 @@ namespace System.Web.Http.Description
         {
             string apiDocumentation = GetApiDocumentation(actionDescriptor);
 
-            HttpParsedRoute parsedRoute = HttpRouteParser.Parse(localPath);
+            HttpParsedRoute parsedRoute = RouteParser.Parse(localPath);
 
             // parameters
             IList<ApiParameterDescription> parameterDescriptions = CreateParameterDescriptions(actionDescriptor, parsedRoute, route.Defaults);
@@ -411,10 +413,21 @@ namespace System.Web.Http.Description
             }
         }
 
+        private static bool ShouldEmitPrefixes(ICollection<ApiParameterDescription> parameterDescriptions)
+        {
+            // Determine if there are two or more complex objects from the Uri so TryExpandUriParameters needs to emit prefixes.
+            return parameterDescriptions.Count(parameter =>
+                        parameter.Source == ApiParameterSource.FromUri &&
+                        parameter.ParameterDescriptor != null &&
+                        !TypeHelper.CanConvertFromString(parameter.ParameterDescriptor.ParameterType) &&
+                        parameter.CanConvertPropertiesFromString()) > 1;
+        }
+
         private static bool TryExpandUriParameters(IHttpRoute route, HttpParsedRoute parsedRoute, ICollection<ApiParameterDescription> parameterDescriptions, out string expandedRouteTemplate)
         {
             Dictionary<string, object> parameterValuesForRoute = new Dictionary<string, object>();
-
+            bool emitPrefixes = ShouldEmitPrefixes(parameterDescriptions);
+            string prefix = String.Empty;
             foreach (ApiParameterDescription parameterDescriptor in parameterDescriptions)
             {
                 if (parameterDescriptor.Source == ApiParameterSource.FromUri)
@@ -424,6 +437,23 @@ namespace System.Web.Http.Description
                         TypeHelper.CanConvertFromString(parameterDescriptor.ParameterDescriptor.ParameterType)))
                     {
                         parameterValuesForRoute.Add(parameterDescriptor.Name, "{" + parameterDescriptor.Name + "}");
+                    }
+                    else if (parameterDescriptor.ParameterDescriptor != null &&
+                             parameterDescriptor.CanConvertPropertiesFromString())
+                    {
+                        if (emitPrefixes)
+                        {
+                            prefix = parameterDescriptor.Name + ".";
+                        }
+     
+                        // Inserting the individual properties of the object in the query string
+                        // as all the complex object can not be converted from string, but all its
+                        // individual properties can.
+                        foreach (PropertyInfo property in parameterDescriptor.GetBindableProperties())
+                        {
+                            string queryParameterName = prefix + property.Name;
+                            parameterValuesForRoute.Add(queryParameterName, "{" + queryParameterName + "}");
+                        }
                     }
                 }
             }
@@ -508,12 +538,14 @@ namespace System.Web.Http.Description
 
         private ApiParameterDescription CreateParameterDescriptionFromDescriptor(HttpParameterDescriptor parameter)
         {
-            ApiParameterDescription parameterDescription = new ApiParameterDescription();
-            parameterDescription.ParameterDescriptor = parameter;
-            parameterDescription.Name = parameter.Prefix ?? parameter.ParameterName;
-            parameterDescription.Documentation = GetApiParameterDocumentation(parameter);
-            parameterDescription.Source = ApiParameterSource.Unknown;
-            return parameterDescription;
+            Contract.Assert(parameter != null);
+            return new ApiParameterDescription
+            {
+                ParameterDescriptor = parameter,
+                Name = parameter.Prefix ?? parameter.ParameterName,
+                Documentation = GetApiParameterDocumentation(parameter),
+                Source = ApiParameterSource.Unknown,
+            };
         }
 
         private ApiParameterDescription CreateParameterDescriptionFromBinding(HttpParameterBinding parameterBinding)

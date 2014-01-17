@@ -21,12 +21,15 @@ namespace System.Web.Http.WebHost.Routing
                 return hostedHttpRoute.OriginalRoute;
             }
 
+            IRouteHandler handler =
+                (httpRoute.Handler is System.Web.Http.Routing.StopRoutingHandler) ? (new System.Web.Routing.StopRoutingHandler() as IRouteHandler) : HttpControllerRouteHandler.Instance;
+
             return new HttpWebRoute(
                 httpRoute.RouteTemplate,
                 MakeRouteValueDictionary(httpRoute.Defaults),
                 MakeRouteValueDictionary(httpRoute.Constraints),
                 MakeRouteValueDictionary(httpRoute.DataTokens),
-                HttpControllerRouteHandler.Instance,
+                handler,
                 httpRoute);
         }
 

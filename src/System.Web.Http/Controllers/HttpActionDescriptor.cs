@@ -117,7 +117,10 @@ namespace System.Web.Http.Controllers
         /// <see cref="HttpResponseMessage"/>. 
         /// </summary>
         /// <remarks>
-        /// <para>This converter is not used when returning an <see cref="IHttpActionResult"/>.</para>
+        /// <para>This converter is not used when the runtime return value of an action is an <see cref="IHttpActionResult"/>.</para>
+        /// <para>
+        /// This value is <see langword="null" /> when the declared <see cref="ReturnType"/> is an <see cref="IHttpActionResult"/>.
+        /// </para>
         /// <para>
         /// The behavior of the returned converter should align with the action's declared <see cref="ReturnType"/>.
         /// </para>
@@ -214,7 +217,7 @@ namespace System.Web.Http.Controllers
         /// </summary>
         /// <param name="controllerContext">The context.</param>
         /// <param name="arguments">The arguments.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="Task{T}"/> that once completed will contain the return value of the action.</returns>
         public abstract Task<object> ExecuteAsync(HttpControllerContext controllerContext, IDictionary<string, object> arguments, CancellationToken cancellationToken);
 

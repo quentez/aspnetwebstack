@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Contracts;
 using System.Globalization;
 using System.IO;
 using System.Security.Principal;
@@ -8,8 +9,10 @@ using System.Text;
 using System.Web.Mvc.Async;
 using System.Web.Mvc.Filters;
 using System.Web.Mvc.Properties;
+using System.Web.Mvc.Routing;
 using System.Web.Profile;
 using System.Web.Routing;
+using System.Web.WebPages;
 
 namespace System.Web.Mvc
 {
@@ -214,7 +217,7 @@ namespace System.Web.Mvc
             PossiblyLoadTempData();
             try
             {
-                string actionName = RouteData.GetRequiredString("action");
+                string actionName = GetActionName(RouteData);
                 if (!ActionInvoker.InvokeAction(ControllerContext, actionName))
                 {
                     HandleUnknownAction(actionName);
@@ -256,10 +259,36 @@ namespace System.Web.Mvc
             return new FilePathResult(fileName, contentType) { FileDownloadName = fileDownloadName };
         }
 
+        private static string GetActionName(RouteData routeData)
+        {
+            Contract.Assert(routeData != null);
+
+            // If this is an attribute routing match then the 'RouteData' has a list of sub-matches rather than
+            // the traditional controller and action values. When the match is an attribute routing match
+            // we'll pass null to the action selector, and let it choose a sub-match to use.
+            if (routeData.HasDirectRouteMatch())
+            {
+                return null;
+            }
+            else
+            {
+                return routeData.GetRequiredString("action");
+            }
+        }
+
         protected virtual void HandleUnknownAction(string actionName)
         {
-            throw new HttpException(404, String.Format(CultureInfo.CurrentCulture,
-                                                       MvcResources.Controller_UnknownAction, actionName, GetType().FullName));
+            // If this is a direct route we might not yet have an action name
+            if (String.IsNullOrEmpty(actionName))
+            {
+                throw new HttpException(404, String.Format(CultureInfo.CurrentCulture,
+                                           MvcResources.Controller_UnknownAction_NoActionName, GetType().FullName));
+            }
+            else
+            {
+                throw new HttpException(404, String.Format(CultureInfo.CurrentCulture,
+                                                           MvcResources.Controller_UnknownAction, actionName, GetType().FullName));
+            }
         }
 
         protected internal HttpNotFoundResult HttpNotFound()
@@ -427,7 +456,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToAction(string actionName, object routeValues)
         {
-            return RedirectToAction(actionName, new RouteValueDictionary(routeValues));
+            return RedirectToAction(actionName, TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal RedirectToRouteResult RedirectToAction(string actionName, RouteValueDictionary routeValues)
@@ -442,7 +471,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToAction(string actionName, string controllerName, object routeValues)
         {
-            return RedirectToAction(actionName, controllerName, new RouteValueDictionary(routeValues));
+            return RedirectToAction(actionName, controllerName, TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal virtual RedirectToRouteResult RedirectToAction(string actionName, string controllerName, RouteValueDictionary routeValues)
@@ -468,7 +497,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToActionPermanent(string actionName, object routeValues)
         {
-            return RedirectToActionPermanent(actionName, new RouteValueDictionary(routeValues));
+            return RedirectToActionPermanent(actionName, TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal RedirectToRouteResult RedirectToActionPermanent(string actionName, RouteValueDictionary routeValues)
@@ -483,7 +512,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToActionPermanent(string actionName, string controllerName, object routeValues)
         {
-            return RedirectToActionPermanent(actionName, controllerName, new RouteValueDictionary(routeValues));
+            return RedirectToActionPermanent(actionName, controllerName, TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal virtual RedirectToRouteResult RedirectToActionPermanent(string actionName, string controllerName, RouteValueDictionary routeValues)
@@ -498,7 +527,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToRoute(object routeValues)
         {
-            return RedirectToRoute(new RouteValueDictionary(routeValues));
+            return RedirectToRoute(TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal RedirectToRouteResult RedirectToRoute(RouteValueDictionary routeValues)
@@ -513,7 +542,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToRoute(string routeName, object routeValues)
         {
-            return RedirectToRoute(routeName, new RouteValueDictionary(routeValues));
+            return RedirectToRoute(routeName, TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal virtual RedirectToRouteResult RedirectToRoute(string routeName, RouteValueDictionary routeValues)
@@ -523,7 +552,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToRoutePermanent(object routeValues)
         {
-            return RedirectToRoutePermanent(new RouteValueDictionary(routeValues));
+            return RedirectToRoutePermanent(TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal RedirectToRouteResult RedirectToRoutePermanent(RouteValueDictionary routeValues)
@@ -538,7 +567,7 @@ namespace System.Web.Mvc
 
         protected internal RedirectToRouteResult RedirectToRoutePermanent(string routeName, object routeValues)
         {
-            return RedirectToRoutePermanent(routeName, new RouteValueDictionary(routeValues));
+            return RedirectToRoutePermanent(routeName, TypeHelper.ObjectToDictionary(routeValues));
         }
 
         protected internal virtual RedirectToRouteResult RedirectToRoutePermanent(string routeName, RouteValueDictionary routeValues)
@@ -831,7 +860,7 @@ namespace System.Web.Mvc
             PossiblyLoadTempData();
             try
             {
-                string actionName = RouteData.GetRequiredString("action");
+                string actionName = GetActionName(RouteData);
                 IActionInvoker invoker = ActionInvoker;
                 IAsyncActionInvoker asyncInvoker = invoker as IAsyncActionInvoker;
                 if (asyncInvoker != null)

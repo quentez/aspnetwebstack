@@ -158,7 +158,7 @@ namespace System.Web.Helpers.Test
         [Fact]
         public void PrintDateTime()
         {
-            using (new CultureReplacer())
+            using (new CultureReplacer("en-US"))
             {
                 // Arrange
                 MockObjectVisitor visitor = CreateObjectVisitor();
@@ -186,7 +186,7 @@ namespace System.Web.Helpers.Test
                 Type = 1
             };
 
-            using (new CultureReplacer())
+            using (new CultureReplacer("en-US"))
             {
                 // Act            
                 visitor.Print(person);
@@ -294,7 +294,7 @@ namespace System.Web.Helpers.Test
         }
 
         [Fact]
-        public void PrintWritesEnumeratedElementsUntilLimitIsHit()
+        public void PrintWritesEnumeratedElementsUntilLimitIsReached()
         {
             // Arrange
             MockObjectVisitor visitor = CreateObjectVisitor();
@@ -414,6 +414,7 @@ namespace System.Web.Helpers.Test
         }
 
         [Fact]
+        [ReplaceCulture]
         public void PrintClassWithPropertyThatThrowsExceptionPrintsException()
         {
             // Arrange

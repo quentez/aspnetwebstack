@@ -171,16 +171,17 @@ namespace System.Web.Http.Tracing
                             "get_Indent", "set_Indent",
                             "get_WriterSettings",
                             "get_MaxDepth", "set_MaxDepth",
+                            "InvokeCreateXmlReader", "InvokeCreateXmlWriter", 
+                            "InvokeGetDeserializer", "InvokeGetSerializer",
                             // Cannot override, base handles correctly
                             "SelectCharacterEncoding",
                             // Assume these are called before starting app.
                             // Tracer does not need to see them,
                             // and inner will uses its copies in read or write
                             "SetSerializer", "RemoveSerializer",
-                            "GetSerializer", "GetDeserializer",
-                            "CreateXmlWriter", "CreateXmlReader"
                         }
                     },
+                    { typeof(DefaultHttpControllerTypeResolver), typeof(DefaultHttpControllerTypeResolverTracer), new string[0] },
                 };
             }
         }
@@ -282,7 +283,7 @@ namespace System.Web.Http.Tracing
             return issues;
         }
 
-        static void AddIssues(Type tracerType, IList<string> issues, MethodInfo methodInfo, string[] excludedMembers)
+        private static void AddIssues(Type tracerType, IList<string> issues, MethodInfo methodInfo, string[] excludedMembers)
         {
             if (methodInfo == null ||
                 !(methodInfo.IsPublic || methodInfo.IsFamily) ||
@@ -292,7 +293,7 @@ namespace System.Web.Http.Tracing
             }
 
             // Allow exclusion list to be short name or long name, because some members are up the inheritance chain
-            string visibleMemberName = String.Format("{0}.{1}", methodInfo.DeclaringType.Name, methodInfo.Name);
+            string visibleMemberName = String.Format("{0}.{1}", methodInfo.DeclaringType.Name, GetSignature(methodInfo));
             if (!DoesTracerDeclare(tracerType, methodInfo) && !excludedMembers.Contains(visibleMemberName) && !excludedMembers.Contains(methodInfo.Name))
             {
                 bool isOverrideable = IsOverrideable(methodInfo);
@@ -310,14 +311,14 @@ namespace System.Web.Http.Tracing
             }
         }
 
-        static bool IsOverrideable(MethodInfo methodInfo)
+        private static bool IsOverrideable(MethodInfo methodInfo)
         {
             return !methodInfo.IsFinal && (methodInfo.IsVirtual || methodInfo.IsAbstract);
         }
 
-        static bool DoMethodsMatch(MethodInfo originalMethodInfo, MethodInfo candidateMethodInfo)
+        private static bool DoMethodsMatch(MethodInfo originalMethodInfo, MethodInfo candidateMethodInfo)
         {
-            if (!candidateMethodInfo.Name.Substring(candidateMethodInfo.Name.LastIndexOf('.') + 1).Equals(originalMethodInfo.Name))
+            if (!GetSignature(candidateMethodInfo).Equals(GetSignature(originalMethodInfo)))
             {
                 return false;
             }
@@ -325,7 +326,14 @@ namespace System.Web.Http.Tracing
             return true;
         }
 
-        static bool DoesTracerDeclare(Type tracerType, MethodInfo methodInfo)
+        private static string GetSignature(MethodInfo methodInfo)
+        {
+            return
+                String.Format("{0}({1})", methodInfo.Name.Substring(methodInfo.Name.LastIndexOf(".") + 1),
+                    String.Join(",", methodInfo.GetParameters().Select(p => p.ParameterType.Name)));
+        }
+
+        private static bool DoesTracerDeclare(Type tracerType, MethodInfo methodInfo)
         {
             if (methodInfo == null)
             {

@@ -11,6 +11,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Internal;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
 using System.Xml;
@@ -349,27 +350,22 @@ namespace System.Net.Http.Formatting
 #endif
         }
 
-        /// <summary>
-        /// Called during serialization to write an object of the specified <paramref name="type"/>
-        /// to the specified <paramref name="writeStream"/>.
-        /// </summary>
-        /// <param name="type">The type of object to write.</param>
-        /// <param name="value">The object to write.</param>
-        /// <param name="writeStream">The <see cref="Stream"/> to which to write.</param>
-        /// <param name="content">The <see cref="HttpContent"/> for the content being written.</param>
-        /// <param name="transportContext">The <see cref="TransportContext"/>.</param>
-        /// <returns>A <see cref="Task"/> that will write the value to the stream.</returns>
+        /// <inheritdoc/>
         [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "The caught exception type is reflected into a faulted task.")]
-        public override Task WriteToStreamAsync(Type type, object value, Stream writeStream, HttpContent content, TransportContext transportContext)
+        public override Task WriteToStreamAsync(Type type, object value, Stream writeStream, HttpContent content,
+            TransportContext transportContext, CancellationToken cancellationToken)
         {
             if (type == null)
             {
                 throw Error.ArgumentNull("type");
             }
-
             if (writeStream == null)
             {
                 throw Error.ArgumentNull("writeStream");
+            }
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return TaskHelpers.Canceled();
             }
 
             try
@@ -447,6 +443,63 @@ namespace System.Net.Http.Formatting
             return XmlWriter.Create(writeStream, writerSettings);
         }
 
+        /// <summary>
+        /// Called during deserialization to get the XML serializer.
+        /// </summary>
+        /// <param name="type">The type of object that will be serialized or deserialized.</param>
+        /// <returns>The <see cref="XmlSerializer"/> used to serialize the object.</returns>
+        public virtual XmlSerializer CreateXmlSerializer(Type type)
+        {
+            return new XmlSerializer(type);
+        }
+
+        /// <summary>
+        /// Called during deserialization to get the DataContractSerializer serializer.
+        /// </summary>
+        /// <param name="type">The type of object that will be serialized or deserialized.</param>
+        /// <returns>The <see cref="DataContractSerializer"/> used to serialize the object.</returns>
+        public virtual DataContractSerializer CreateDataContractSerializer(Type type)
+        {
+            return new DataContractSerializer(type);
+        }
+
+        /// <summary>
+        /// This method is to support infrastructure and is not intended to be used directly from your code.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public XmlReader InvokeCreateXmlReader(Stream readStream, HttpContent content)
+        {
+            return CreateXmlReader(readStream, content);
+        }
+
+        /// <summary>
+        /// This method is to support infrastructure and is not intended to be used directly from your code.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public XmlWriter InvokeCreateXmlWriter(Stream writeStream, HttpContent content)
+        {
+            return CreateXmlWriter(writeStream, content);
+        }
+
+        /// <summary>
+        /// This method is to support infrastructure and is not intended to be used directly from your code.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public object InvokeGetDeserializer(Type type, HttpContent content)
+        {
+            return GetDeserializer(type, content);
+        }
+
+        /// <summary>
+        /// This method is to support infrastructure and is not intended to be used directly from your code.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public object InvokeGetSerializer(Type type, object value, HttpContent content)
+        {
+            return GetSerializer(type, value, content);
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "Since we use an extensible factory method we cannot control the exceptions being thrown")]
         private object CreateDefaultSerializer(Type type, bool throwOnError)
         {
             Contract.Assert(type != null, "type cannot be null.");
@@ -457,7 +510,7 @@ namespace System.Net.Http.Formatting
             {
                 if (UseXmlSerializer)
                 {
-                    serializer = new XmlSerializer(type);
+                    serializer = CreateXmlSerializer(type);
                 }
                 else
                 {
@@ -466,29 +519,27 @@ namespace System.Net.Http.Formatting
                     // Verify that type is a valid data contract by forcing the serializer to try to create a data contract
                     FormattingUtilities.XsdDataContractExporter.GetRootElementName(type);
 #endif
-                    serializer = new DataContractSerializer(type);
+                    serializer = CreateDataContractSerializer(type);
                 }
             }
-            catch (InvalidOperationException invalidOperationException)
+            catch (Exception caught)
             {
-                exception = invalidOperationException;
-            }
-            catch (NotSupportedException notSupportedException)
-            {
-                exception = notSupportedException;
-            }
-            catch (InvalidDataContractException invalidDataContractException)
-            {
-                exception = invalidDataContractException;
+                exception = caught;
             }
 
-            if (exception != null)
+            if (serializer == null && throwOnError)
             {
-                if (throwOnError)
+                if (exception != null)
                 {
                     throw Error.InvalidOperation(exception, Properties.Resources.SerializerCannotSerializeType,
                                   UseXmlSerializer ? typeof(XmlSerializer).Name : typeof(DataContractSerializer).Name,
                                   type.Name);
+                }
+                else
+                {
+                    throw Error.InvalidOperation(Properties.Resources.SerializerCannotSerializeType,
+                              UseXmlSerializer ? typeof(XmlSerializer).Name : typeof(DataContractSerializer).Name,
+                              type.Name);
                 }
             }
 

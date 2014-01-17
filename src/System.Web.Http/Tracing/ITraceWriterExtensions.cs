@@ -354,24 +354,9 @@ namespace System.Web.Http.Tracing
                         }
                     });
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                traceWriter.Trace(
-                    request,
-                    category,
-                    TraceLevel.Error,
-                    (TraceRecord traceRecord) =>
-                    {
-                        traceRecord.Kind = TraceKind.End;
-                        traceRecord.Operator = operatorName;
-                        traceRecord.Operation = operationName;
-                        traceRecord.Exception = ex;
-                        if (errorTrace != null)
-                        {
-                            errorTrace(traceRecord);
-                        }
-                    });
-
+                traceWriter.TraceError(exception, request, category, operatorName, operationName, errorTrace);
                 throw;
             }
         }
@@ -446,23 +431,9 @@ namespace System.Web.Http.Tracing
 
                 return traceWriter.TraceBeginEndAsyncCore<TResult>(request, category, level, operatorName, operationName, endTrace, errorTrace, task);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                traceWriter.Trace(
-                    request,
-                    category,
-                    TraceLevel.Error,
-                    (TraceRecord traceRecord) =>
-                    {
-                        traceRecord.Kind = TraceKind.End;
-                        traceRecord.Operator = operatorName;
-                        traceRecord.Operation = operationName;
-                        traceRecord.Exception = ex;
-                        if (errorTrace != null)
-                        {
-                            errorTrace(traceRecord);
-                        }
-                    });
+                traceWriter.TraceError(exception, request, category, operatorName, operationName, errorTrace);
                 throw;
             }
         }
@@ -513,25 +484,12 @@ namespace System.Web.Http.Tracing
                                 errorTrace(traceRecord);
                             }
                         });
+
                 throw;
             }
             catch (Exception exception)
             {
-                traceWriter.Trace(
-                    request,
-                    category,
-                    TraceLevel.Error,
-                    (TraceRecord traceRecord) =>
-                    {
-                        traceRecord.Kind = TraceKind.End;
-                        traceRecord.Exception = exception;
-                        traceRecord.Operator = operatorName;
-                        traceRecord.Operation = operationName;
-                        if (errorTrace != null)
-                        {
-                            errorTrace(traceRecord);
-                        }
-                    });
+                traceWriter.TraceError(exception, request, category, operatorName, operationName, errorTrace);
                 throw;
             }
         }
@@ -603,23 +561,9 @@ namespace System.Web.Http.Tracing
 
                 return traceWriter.TraceBeginEndAsyncCore(request, category, level, operatorName, operationName, endTrace, errorTrace, task);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                traceWriter.Trace(
-                    request,
-                    category,
-                    TraceLevel.Error,
-                    (TraceRecord traceRecord) =>
-                    {
-                        traceRecord.Kind = TraceKind.End;
-                        traceRecord.Operator = operatorName;
-                        traceRecord.Operation = operationName;
-                        traceRecord.Exception = ex;
-                        if (errorTrace != null)
-                        {
-                            errorTrace(traceRecord);
-                        }
-                    });
+                traceWriter.TraceError(exception, request, category, operatorName, operationName, errorTrace);
                 throw;
             }
         }
@@ -669,25 +613,12 @@ namespace System.Web.Http.Tracing
                                 errorTrace(traceRecord);
                             }
                         });
+
                 throw;
             }
             catch (Exception exception)
             {
-                traceWriter.Trace(
-                    request,
-                    category,
-                    TraceLevel.Error,
-                    (TraceRecord traceRecord) =>
-                    {
-                        traceRecord.Kind = TraceKind.End;
-                        traceRecord.Exception = exception;
-                        traceRecord.Operator = operatorName;
-                        traceRecord.Operation = operationName;
-                        if (errorTrace != null)
-                        {
-                            errorTrace(traceRecord);
-                        }
-                    });
+                traceWriter.TraceError(exception, request, category, operatorName, operationName, errorTrace);
                 throw;
             }
         }
@@ -732,6 +663,24 @@ namespace System.Web.Http.Tracing
         public static void Warn(this ITraceWriter traceWriter, HttpRequestMessage request, string category, Exception exception, string messageFormat, params object[] messageArguments)
         {
             Trace(traceWriter, request, category, TraceLevel.Warn, exception, messageFormat, messageArguments);
+        }
+
+        private static void TraceError(this ITraceWriter traceWriter, Exception exception, HttpRequestMessage request,
+            string category, string operatorName, string operationName, Action<TraceRecord> errorTrace)
+        {
+            TraceLevel traceLevel = TraceWriterExceptionMapper.GetMappedTraceLevel(exception) ?? TraceLevel.Error;
+            traceWriter.Trace(request, category, traceLevel, (traceRecord) =>
+                {
+                    traceRecord.Kind = TraceKind.End;
+                    traceRecord.Operator = operatorName;
+                    traceRecord.Operation = operationName;
+                    traceRecord.Exception = exception;
+                    TraceWriterExceptionMapper.TranslateHttpResponseException(traceRecord);
+                    if (errorTrace != null)
+                    {
+                        errorTrace(traceRecord);
+                    }
+                });
         }
     }
 }

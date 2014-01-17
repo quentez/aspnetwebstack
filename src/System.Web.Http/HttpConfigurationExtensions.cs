@@ -1,20 +1,14 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
-using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
-using System.Linq;
-using System.Net.Http;
 using System.Web.Http.Controllers;
-using System.Web.Http.Dispatcher;
 using System.Web.Http.Filters;
 using System.Web.Http.Hosting;
 using System.Web.Http.ModelBinding;
 using System.Web.Http.ModelBinding.Binders;
-using System.Web.Http.Properties;
 using System.Web.Http.Routing;
 
 namespace System.Web.Http
@@ -22,9 +16,6 @@ namespace System.Web.Http
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static class HttpConfigurationExtensions
     {
-        // Attribute routing will inject a single top-level route into the route table. 
-        private const string AttributeRouteName = "MS_attributerouteWebApi";
-
         /// <summary>
         /// Register that the given parameter type on an Action is to be bound using the model binder.
         /// </summary>
@@ -62,120 +53,61 @@ namespace System.Web.Http
         /// Maps the attribute-defined routes for the application.
         /// </summary>
         /// <param name="configuration">The server configuration.</param>
+        // Corresponds to the MVC implementation of attribute routing in
+        // System.Web.Mvc.RouteCollectionAttributeRoutingExtensions.
         public static void MapHttpAttributeRoutes(this HttpConfiguration configuration)
         {
-            MapHttpAttributeRoutes(configuration, new DefaultInlineConstraintResolver());
+            if (configuration == null)
+            {
+                throw new ArgumentNullException("configuration");
+            }
+
+            AttributeRoutingMapper.MapAttributeRoutes(configuration, new DefaultInlineConstraintResolver());
         }
 
         /// <summary>
         /// Maps the attribute-defined routes for the application.
         /// </summary>
         /// <param name="configuration">The server configuration.</param>
-        /// <param name="constraintResolver">The <see cref="IInlineConstraintResolver"/> to use for resolving inline constraints.</param>
-        public static void MapHttpAttributeRoutes(this HttpConfiguration configuration, IInlineConstraintResolver constraintResolver)
+        /// <param name="constraintResolver">
+        /// The <see cref="IInlineConstraintResolver"/> to use for resolving inline constraints.
+        /// </param>
+        // Corresponds to the MVC implementation of attribute routing in
+        // System.Web.Mvc.RouteCollectionAttributeRoutingExtensions.
+        public static void MapHttpAttributeRoutes(this HttpConfiguration configuration,
+            IInlineConstraintResolver constraintResolver)
         {
-            HttpRouteBuilder routeBuilder = new HttpRouteBuilder(constraintResolver);
-            var attrRoute = new RouteCollectionRoute();
-            configuration.Routes.Add(AttributeRouteName, attrRoute);
-
-            Action<HttpConfiguration> previousInitializer = configuration.Initializer;
-            configuration.Initializer = config =>
-                {
-                    // Chain to the previous initializer hook. Do this before we access the config since
-                    // initialization may make last minute changes to the configuration.
-                    previousInitializer(config);
-
-                    // Add a single placeholder route that handles all of attribute routing.
-                    // Add an initialize hook that initializes these routes after the config has been initialized.
-                    Func<HttpSubRouteCollection> initializer = () => MapHttpAttributeRoutesInternal(configuration, routeBuilder);
-
-                    // This won't change config. It wants to pick up the finalized config.
-                    HttpSubRouteCollection subRoutes = attrRoute.EnsureInitialized(initializer);
-                    if (subRoutes != null)
-                    {
-                        AddGenerationHooksForSubRoutes(config.Routes, subRoutes, routeBuilder);
-                    }
-                };
-        }
-
-        // Add generation hooks for the Attribute-routing subroutes. 
-        // This lets us generate urls for routes supplied by attr-based routing.
-        private static void AddGenerationHooksForSubRoutes(HttpRouteCollection destRoutes, HttpSubRouteCollection sourceRoutes, HttpRouteBuilder routeBuilder)
-        {
-            foreach (KeyValuePair<string, IHttpRoute> kv in sourceRoutes.NamedRoutes)
+            if (configuration == null)
             {
-                string name = kv.Key;
-                IHttpRoute route = kv.Value;
-                var stubRoute = routeBuilder.BuildGenerationRoute(route);
-                destRoutes.Add(name, stubRoute);
+                throw new ArgumentNullException("configuration");
             }
+
+            if (constraintResolver == null)
+            {
+                throw new ArgumentNullException("constraintResolver");
+            }
+
+            AttributeRoutingMapper.MapAttributeRoutes(configuration, constraintResolver);
         }
 
         // Test Hook for inspecting the route table generated by MapHttpAttributeRoutes. 
         // MapHttpAttributeRoutes doesn't return the route collection because it's an implementation detail
         // that attr routes even generate a meaningful route collection. 
-        // Public APIs can get similar functionality by querying the IHttpRoute for IEnumerable<IHttpRoute>.
-        internal static HttpSubRouteCollection GetAttributeRoutes(this HttpConfiguration configuration)
+        // Public APIs can get similar functionality by querying the IHttpRoute for IReadOnlyCollection<IHttpRoute>.
+        internal static IReadOnlyCollection<IHttpRoute> GetAttributeRoutes(this HttpConfiguration configuration)
         {
             configuration.EnsureInitialized();
 
             HttpRouteCollection routes = configuration.Routes;
             foreach (IHttpRoute route in routes)
             {
-                var attrRoute = route as RouteCollectionRoute;
+                var attrRoute = route as IReadOnlyCollection<IHttpRoute>;
                 if (attrRoute != null)
                 {
-                    return attrRoute.SubRoutes;
+                    return attrRoute;
                 }
             }
             return null;
-        }
-
-        [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope",
-            Justification = "HttpRouteCollection doesn't need to be disposed")]
-        private static HttpSubRouteCollection MapHttpAttributeRoutesInternal(this HttpConfiguration configuration, HttpRouteBuilder routeBuilder)
-        {
-            HttpSubRouteCollection subRoutes = new HttpSubRouteCollection();
-
-            if (configuration == null)
-            {
-                throw Error.ArgumentNull("configuration");
-            }
-
-            if (routeBuilder == null)
-            {
-                throw Error.ArgumentNull("routeBuilder");
-            }
-
-            List<HttpRouteEntry> attributeRoutes = new List<HttpRouteEntry>();
-
-            IHttpControllerSelector controllerSelector = configuration.Services.GetHttpControllerSelector();
-            IDictionary<string, HttpControllerDescriptor> controllerMap = controllerSelector.GetControllerMapping();
-            if (controllerMap != null)
-            {
-                foreach (HttpControllerDescriptor controllerDescriptor in controllerMap.Values)
-                {
-                    IEnumerable<HttpRouteEntry> controllerRoutes = CreateRouteEntries(controllerDescriptor);
-
-                    foreach (HttpRouteEntry route in controllerRoutes)
-                    {
-                        route.Route = routeBuilder.BuildParsingRoute(route.Template, route.Order, route.Actions);
-                    }
-
-                    attributeRoutes.AddRange(controllerRoutes);
-                }
-
-                foreach (HttpRouteEntry attributeRoute in attributeRoutes)
-                {
-                    IHttpRoute route = attributeRoute.Route;
-                    if (route != null)
-                    {
-                        subRoutes.Add(attributeRoute.Name, attributeRoute.Route);
-                    }
-                }
-            }
-
-            return subRoutes;
         }
 
         /// <summary>Enables suppression of the host's principal.</summary>
@@ -197,166 +129,6 @@ namespace System.Web.Http
 
             Contract.Assert(configuration.MessageHandlers != null);
             configuration.MessageHandlers.Insert(0, new SuppressHostPrincipalMessageHandler());
-        }
-
-        private static IEnumerable<HttpRouteEntry> CreateRouteEntries(HttpControllerDescriptor controllerDescriptor)
-        {
-            IHttpActionSelector actionSelector = controllerDescriptor.Configuration.Services.GetActionSelector();
-            ILookup<string, HttpActionDescriptor> actionMap = actionSelector.GetActionMapping(controllerDescriptor);
-            if (actionMap == null)
-            {
-                return Enumerable.Empty<HttpRouteEntry>();
-            }
-
-            List<HttpRouteEntry> routes = new List<HttpRouteEntry>();
-            string routePrefix = GetRoutePrefix(controllerDescriptor);
-            List<ReflectedHttpActionDescriptor> actionsWithoutRoutes = new List<ReflectedHttpActionDescriptor>();
-
-            foreach (IGrouping<string, HttpActionDescriptor> actionGrouping in actionMap)
-            {
-                string actionName = actionGrouping.Key;
-
-                foreach (ReflectedHttpActionDescriptor actionDescriptor in actionGrouping.OfType<ReflectedHttpActionDescriptor>())
-                {
-                    Collection<IHttpRouteInfoProvider> routeProviders = actionDescriptor.GetCustomAttributes<IHttpRouteInfoProvider>(inherit: false);
-
-                    // Ignore the Route attributes from inherited actions.
-                    if (actionDescriptor.MethodInfo != null && 
-                        actionDescriptor.MethodInfo.DeclaringType != controllerDescriptor.ControllerType)
-                    {
-                        routeProviders = null;
-                    }
-
-                    if (routeProviders != null && routeProviders.Count > 0)
-                    {
-                        AddRouteEntries(routes, actionName, routePrefix, routeProviders,
-                            new ReflectedHttpActionDescriptor[] { actionDescriptor });
-                    }
-                    else
-                    {
-                        // IF there are no routes on the specific action, attach it to the controller routes (if any).
-                        actionsWithoutRoutes.Add(actionDescriptor);
-                    }
-                }
-            }
-
-            Collection<IHttpRouteInfoProvider> controllerRouteProviders =
-                controllerDescriptor.GetCustomAttributes<IHttpRouteInfoProvider>(inherit: false);
-
-            // If they exist and have not been overridden, create routes for controller-level route providers.
-            if (controllerRouteProviders != null && controllerRouteProviders.Count > 0
-                && actionsWithoutRoutes.Count > 0)
-            {
-                AddRouteEntries(routes, actionsWithoutRoutes[0].ActionName, routePrefix, controllerRouteProviders,
-                    actionsWithoutRoutes);
-            }
-
-            return routes;
-        }
-
-        private static void AddRouteEntries(List<HttpRouteEntry> routes, string actionName, string routePrefix,
-            Collection<IHttpRouteInfoProvider> routeProviders,
-            IEnumerable<ReflectedHttpActionDescriptor> actionDescriptors)
-        {
-            foreach (IHttpRouteInfoProvider routeProvider in routeProviders)
-            {
-                HttpRouteEntry entry = CreateRouteEntry(actionName, routePrefix, routeProvider, actionDescriptors);
-                bool mergedWithExistingEntry = false;
-
-                if (String.IsNullOrEmpty(entry.Name))
-                {
-                    // Merge unnamed entries with the exact same template and order.
-                    HttpRouteEntry existingMatch = routes.SingleOrDefault(
-                        e => String.IsNullOrEmpty(e.Name)
-                            && String.Equals(e.Template, entry.Template, StringComparison.Ordinal)
-                            && e.Order == entry.Order);
-
-                    if (existingMatch != null)
-                    {
-                        mergedWithExistingEntry = true;
-
-                        foreach (ReflectedHttpActionDescriptor descriptor in actionDescriptors)
-                        {
-                            existingMatch.Actions.Add(descriptor);
-                        }
-                    }
-                }
-
-                if (!mergedWithExistingEntry)
-                {
-                    routes.Add(entry);
-                }
-            }
-        }
-
-        private static HttpRouteEntry CreateRouteEntry(string actionName, string routePrefix,
-            IHttpRouteInfoProvider routeProvider, IEnumerable<ReflectedHttpActionDescriptor> actionDescriptors)
-        {
-            string providerTemplate = routeProvider.Template;
-            if (providerTemplate == null)
-            {
-                return null;
-            }
-
-            if (providerTemplate.StartsWith("/", StringComparison.Ordinal))
-            {
-                throw Error.InvalidOperation(SRResources.AttributeRoutes_InvalidTemplate, providerTemplate,
-                    actionName);
-            }
-
-            string routeTemplate = BuildRouteTemplate(routePrefix, providerTemplate);
-
-            return new HttpRouteEntry()
-            {
-                Name = routeProvider.Name,
-                Template = routeTemplate,
-                Order = routeProvider.Order,
-                Actions = new HashSet<ReflectedHttpActionDescriptor>(actionDescriptors)
-            };
-        }
-
-        private static string GetRoutePrefix(HttpControllerDescriptor controllerDescriptor)
-        {
-            Collection<RoutePrefixAttribute> routePrefixAttributes = controllerDescriptor.GetCustomAttributes<RoutePrefixAttribute>(inherit: false);
-            if (routePrefixAttributes.Count > 0)
-            {
-                string routePrefix = routePrefixAttributes[0].Prefix;
-                if (routePrefix != null)
-                {
-                    if (routePrefix.EndsWith("/", StringComparison.Ordinal))
-                    {
-                        throw Error.InvalidOperation(SRResources.AttributeRoutes_InvalidPrefix, routePrefix, controllerDescriptor.ControllerName);
-                    }
-
-                    return routePrefix;
-                }
-            }
-            return null;
-        }
-
-        private static string BuildRouteTemplate(string routePrefix, string routeTemplate)
-        {
-            Contract.Assert(routeTemplate != null);
-
-            // If the provider's template starts with '~/', ignore the route prefix
-            if (routeTemplate.StartsWith("~/", StringComparison.Ordinal))
-            {
-                return routeTemplate.Substring(2);
-            }
-
-            if (String.IsNullOrEmpty(routePrefix))
-            {
-                return routeTemplate;
-            }
-            else if (routeTemplate.Length == 0)
-            {
-                return routePrefix;
-            }
-            else
-            {
-                // template and prefix both not null - combine them
-                return routePrefix + '/' + routeTemplate;
-            }
         }
     }
 }

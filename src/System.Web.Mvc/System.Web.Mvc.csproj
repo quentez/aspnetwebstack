@@ -13,7 +13,6 @@
     <DefineConstants>$(DefineConstants);ASPNETMVC</DefineConstants>
     <NoWarn>1591</NoWarn>
     <BaseAddress>1609891840</BaseAddress>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -50,6 +49,36 @@
     </Compile>
     <Compile Include="..\Common\PrefixContainer.cs">
       <Link>Common\PrefixContainer.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\DirectRouteBuilder.cs">
+      <Link>Routing\DirectRouteBuilder.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\DirectRouteFactoryContext.cs">
+      <Link>Routing\DirectRouteFactoryContext.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\IDirectRouteBuilder.cs">
+      <Link>Routing\IDirectRouteBuilder.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\IDirectRouteFactory.cs">
+      <Link>Routing\IDirectRouteFactory.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\IInlineConstraintResolver.cs">
+      <Link>Routing\IInlineConstraintResolver.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteEntry.cs">
+      <Link>Routing\RouteEntry.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteFactoryAttribute.cs">
+      <Link>Routing\RouteFactoryAttribute.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteInfoDirectRouteFactory.cs">
+      <Link>Routing\RouteInfoDirectRouteFactory.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteParser.cs">
+      <Link>Routing\RouteParser.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RoutePrecedence.cs">
+      <Link>Routing\RoutePrecedence.cs</Link>
     </Compile>
     <Compile Include="..\Common\TaskHelpers.cs">
       <Link>Common\TaskHelpers.cs</Link>
@@ -117,32 +146,45 @@
     <Compile Include="..\Common\Routing\InlineRouteTemplateParser.cs">
       <Link>Routing\InlineRouteTemplateParser.cs</Link>
     </Compile>
-    <Compile Include="..\Common\Routing\HttpRouteEntry.cs">
-      <Link>Routing\RouteParsing\HttpRouteEntry.cs</Link>
+    <Compile Include="..\Common\Routing\SubRouteCollection.cs">
+      <Link>Routing\SubRouteCollection.cs</Link>
     </Compile>
-    <Compile Include="..\Common\Routing\HttpRouteParser.cs">
-      <Link>Routing\RouteParsing\HttpRouteParser.cs</Link>
+    <Compile Include="..\Common\Routing\IRoutePrefix.cs">
+      <Link>Routing\IRoutePrefix.cs</Link>
     </Compile>
     <Compile Include="ActionMethodSelectorBase.cs" />
+    <Compile Include="ActionNameSelector.cs" />
     <Compile Include="ControllerDescriptorExtensions.cs" />
-    <Compile Include="Routing\RouteParsing\ParsedRoute.cs" />
+    <Compile Include="Html\EnumHelper.cs" />
+    <Compile Include="MaxLengthAttributeAdapter.cs" />
+    <Compile Include="MinLengthAttributeAdapter.cs" />
+    <Compile Include="Properties\MvcResources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>MvcResources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Routing\ConstraintValidation.cs" />
+    <Compile Include="Routing\DirectRouteCandidate.cs" />
+    <Compile Include="Routing\LinkGenerationRoute.cs" />
+    <Compile Include="Routing\RouteCollectionRoute.cs" />
+    <Compile Include="Routing\ParsedRoute.cs" />
     <Compile Include="..\Common\Routing\PathContentSegment.cs">
-      <Link>Routing\RouteParsing\PathContentSegment.cs</Link>
+      <Link>Routing\PathContentSegment.cs</Link>
     </Compile>
     <Compile Include="..\Common\Routing\PathLiteralSubsegment.cs">
-      <Link>Routing\RouteParsing\PathLiteralSubsegment.cs</Link>
+      <Link>Routing\PathLiteralSubsegment.cs</Link>
     </Compile>
     <Compile Include="..\Common\Routing\PathParameterSubsegment.cs">
-      <Link>Routing\RouteParsing\PathParameterSubsegment.cs</Link>
+      <Link>Routing\PathParameterSubsegment.cs</Link>
     </Compile>
     <Compile Include="..\Common\Routing\PathSegment.cs">
-      <Link>Routing\RouteParsing\PathSegment.cs</Link>
+      <Link>Routing\PathSegment.cs</Link>
     </Compile>
     <Compile Include="..\Common\Routing\PathSeparatorSegment.cs">
-      <Link>Routing\RouteParsing\PathSeparatorSegment.cs</Link>
+      <Link>Routing\PathSeparatorSegment.cs</Link>
     </Compile>
     <Compile Include="..\Common\Routing\PathSubsegment.cs">
-      <Link>Routing\RouteParsing\PathSubsegment.cs</Link>
+      <Link>Routing\PathSubsegment.cs</Link>
     </Compile>
     <Compile Include="AdditionalMetaDataAttribute.cs" />
     <Compile Include="AllowAnonymousAttribute.cs" />
@@ -194,7 +236,6 @@
     <Compile Include="Routing\DirectRouteExtensions.cs" />
     <Compile Include="Routing\IRouteInfoProvider.cs" />
     <Compile Include="Routing\RouteBuilder.cs" />
-    <Compile Include="Routing\IInlineConstraintResolver.cs" />
     <Compile Include="Routing\RouteCollectionAttributeRoutingExtensions.cs" />
     <Compile Include="RoutePrefixAttribute.cs" />
     <Compile Include="Routing\RouteDataTokenKeys.cs" />
@@ -531,17 +572,12 @@
     <Compile Include="WebFormView.cs" />
     <Compile Include="WebFormViewEngine.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Properties\MvcResources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>MvcResources.resx</DependentUpon>
-    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Properties\MvcResources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>MvcResources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
+      <LastGenOutput>MvcResources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
@@ -574,5 +610,4 @@
     </ItemGroup>
     <Copy SourceFiles="@(ScriptFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
   </Target>
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
 </Project>

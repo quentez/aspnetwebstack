@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
@@ -55,6 +56,18 @@ namespace System.Web.Razor.Editor
                 return PartialParseResult.Rejected;
             }
 
+            // In some editors intellisense insertions are handled as "dotless commits".  If an intellisense selection is confirmed 
+            // via something like '.' a dotless commit will append a '.' and then insert the remaining intellisense selection prior 
+            // to the appended '.'.  This 'if' statement attempts to accept the intermediate steps of a dotless commit via 
+            // intellisense.  It will accept two cases:
+            //     1. '@foo.' -> '@foobaz.'.
+            //     2. '@foobaz..' -> '@foobaz.bar.'. Includes Sub-cases '@foobaz()..' -> '@foobaz().bar.' etc.
+            // The key distinction being the double '.' in the second case.
+            if (IsDotlessCommitInsertion(target, normalizedChange))
+            {
+                return HandleDotlessCommitInsertion(target);
+            }
+
             if (IsAcceptableReplace(target, normalizedChange))
             {
                 return HandleReplacement(target, normalizedChange);
@@ -74,7 +87,7 @@ namespace System.Web.Razor.Editor
                 return PartialParseResult.Rejected;
             }
 
-            // Only support insertions at the end of the span
+            // Accepts cases when insertions are made at the end of a span or '.' is inserted within a span.
             if (IsAcceptableInsertion(target, normalizedChange))
             {
                 // Handle the insertion
@@ -95,6 +108,36 @@ namespace System.Web.Razor.Editor
             AcceptTrailingDot = acceptTrailingDot;
         }
 
+        // A dotless commit is the process of inserting a '.' with an intellisense selection.
+        private static bool IsDotlessCommitInsertion(Span target, TextChange change)
+        {
+            return IsNewDotlessCommitInsertion(target, change) || IsSecondaryDotlessCommitInsertion(target, change);
+        }
+
+        // Completing 'DateTime' in intellisense with a '.' could result in: '@DateT' -> '@DateT.' -> '@DateTime.' which is accepted.
+        private static bool IsNewDotlessCommitInsertion(Span target, TextChange change)
+        {
+            return !IsAtEndOfSpan(target, change) &&
+                   change.NewPosition > 0 &&
+                   change.NewLength > 0 &&
+                   target.Content.Last() == '.' &&
+                   ParserHelpers.IsIdentifier(change.NewText, requireIdentifierStart: false) &&
+                   (change.OldLength == 0 || ParserHelpers.IsIdentifier(change.OldText, requireIdentifierStart: false));
+        }
+
+        // Once a dotless commit has been performed you then have something like '@DateTime.'.  This scenario is used to detect the
+        // situation when you try to perform another dotless commit resulting in a textchange with '..'.  Completing 'DateTime.Now' 
+        // in intellisense with a '.' could result in: '@DateTime.' -> '@DateTime..' -> '@DateTime.Now.' which is accepted.
+        private static bool IsSecondaryDotlessCommitInsertion(Span target, TextChange change)
+        {
+            // Do not need to worry about other punctuation, just looking for double '.' (after change)
+            return change.NewLength == 1 &&
+                   !String.IsNullOrEmpty(target.Content) &&
+                   target.Content.Last() == '.' &&
+                   change.NewText == "." &&
+                   change.OldLength == 0;
+        }
+
         private static bool IsAcceptableReplace(Span target, TextChange change)
         {
             return IsEndReplace(target, change) ||
@@ -107,16 +150,52 @@ namespace System.Web.Razor.Editor
                    (change.IsDelete && RemainingIsWhitespace(target, change));
         }
 
+        // Acceptable insertions can occur at the end of a span or when a '.' is inserted within a span.
         private static bool IsAcceptableInsertion(Span target, TextChange change)
         {
-            return IsEndInsertion(target, change) ||
-                   (change.IsInsert && RemainingIsWhitespace(target, change));
+            return change.IsInsert &&
+                   (IsAcceptableEndInsertion(target, change) ||
+                   IsAcceptableInnerInsertion(target, change));
+        }
+
+        // Accepts character insertions at the end of spans.  AKA: '@foo' -> '@fooo' or '@foo' -> '@foo   ' etc.
+        private static bool IsAcceptableEndInsertion(Span target, TextChange change)
+        {
+            Debug.Assert(change.IsInsert);
+
+            return IsAtEndOfSpan(target, change) ||
+                   RemainingIsWhitespace(target, change);
+        }
+
+        // Accepts '.' insertions in the middle of spans. Ex: '@foo.baz.bar' -> '@foo..baz.bar'
+        // This is meant to allow intellisense when editing a span.
+        [SuppressMessage("Microsoft.Usage", "CA1801:ReviewUnusedParameters", MessageId = "target", Justification = "The 'target' parameter is used in Debug to validate that the function is called in the correct context.")]
+        private static bool IsAcceptableInnerInsertion(Span target, TextChange change)
+        {
+            Debug.Assert(change.IsInsert);
+
+            // Ensure that we're actually inserting in the middle of a span and not at the end.
+            // This case will fail if the IsAcceptableEndInsertion does not capture an end insertion correctly.
+            Debug.Assert(!IsAtEndOfSpan(target, change));
+
+            return change.NewPosition > 0 &&
+                   change.NewText == ".";
         }
 
         private static bool RemainingIsWhitespace(Span target, TextChange change)
         {
             int offset = (change.OldPosition - target.Start.AbsoluteIndex) + change.OldLength;
             return String.IsNullOrWhiteSpace(target.Content.Substring(offset));
+        }
+
+        private PartialParseResult HandleDotlessCommitInsertion(Span target)
+        {
+            PartialParseResult result = PartialParseResult.Accepted;
+            if (!AcceptTrailingDot && target.Content.LastOrDefault() == '.')
+            {
+                result |= PartialParseResult.Provisional;
+            }
+            return result;
         }
 
         private PartialParseResult HandleReplacement(Span target, TextChange change)
@@ -206,8 +285,8 @@ namespace System.Web.Razor.Editor
 
         private PartialParseResult HandleInsertionAfterDot(Span target, TextChange change)
         {
-            // If the insertion is a full identifier, accept it
-            if (ParserHelpers.IsIdentifier(change.NewText))
+            // If the insertion is a full identifier or another dot, accept it
+            if (ParserHelpers.IsIdentifier(change.NewText) || change.NewText == ".")
             {
                 return TryAcceptChange(target, change);
             }

@@ -1,9 +1,14 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
+using System.Diagnostics;
+using System.Diagnostics.Contracts;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web.Http.Controllers;
+using System.Web.Http.ExceptionHandling;
 using System.Web.Http.Hosting;
 
 namespace System.Web.Http.Batch
@@ -19,6 +24,8 @@ namespace System.Web.Http.Batch
     //     - UnbufferedODataBatchHandler
     public abstract class HttpBatchHandler : HttpMessageHandler
     {
+        private readonly HttpServer _server;
+
         /// <summary>
         /// Initializes a new instance of the <see cref="HttpBatchHandler"/> class.
         /// </summary>
@@ -30,6 +37,7 @@ namespace System.Web.Http.Batch
                 throw Error.ArgumentNull("httpServer");
             }
 
+            _server = httpServer;
             Invoker = new HttpMessageInvoker(httpServer);
         }
 
@@ -37,6 +45,32 @@ namespace System.Web.Http.Batch
         /// Gets the invoker to send the batch requests to the <see cref="HttpServer"/>.
         /// </summary>
         public HttpMessageInvoker Invoker { get; private set; }
+
+        /// <remarks>This property is internal and settable only for unit testing purposes.</remarks>
+        internal IExceptionLogger ExceptionLogger
+        {
+            get
+            {
+                return _server.ExceptionLogger;
+            }
+            set
+            {
+                _server.ExceptionLogger = value;
+            }
+        }
+
+        /// <remarks>This property is internal and settable only for unit testing purposes.</remarks>
+        internal IExceptionHandler ExceptionHandler
+        {
+            get
+            {
+                return _server.ExceptionHandler;
+            }
+            set
+            {
+                _server.ExceptionHandler = value;
+            }
+        }
 
         /// <inheritdoc/>
         protected sealed override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -48,6 +82,8 @@ namespace System.Web.Http.Batch
 
             request.Properties[HttpPropertyKeys.IsBatchRequest] = true;
 
+            ExceptionDispatchInfo exceptionInfo;
+
             try
             {
                 return await ProcessBatchAsync(request, cancellationToken);
@@ -58,15 +94,29 @@ namespace System.Web.Http.Batch
             }
             catch (Exception exception)
             {
-                return request.CreateErrorResponse(HttpStatusCode.InternalServerError, exception);
+                exceptionInfo = ExceptionDispatchInfo.Capture(exception);
             }
+
+            Debug.Assert(exceptionInfo.SourceException != null);
+
+            ExceptionContext exceptionContext = new ExceptionContext(exceptionInfo.SourceException,
+                ExceptionCatchBlocks.HttpBatchHandler, request);
+            await ExceptionLogger.LogAsync(exceptionContext, cancellationToken);
+            HttpResponseMessage response = await ExceptionHandler.HandleAsync(exceptionContext, cancellationToken);
+
+            if (response == null)
+            {
+                exceptionInfo.Throw();
+            }
+
+            return response;
         }
 
         /// <summary>
         /// Processes the incoming batch request as a single <see cref="HttpRequestMessage"/>.
         /// </summary>
         /// <param name="request">The batch request.</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
         /// <returns>The batch response.</returns>
         public abstract Task<HttpResponseMessage> ProcessBatchAsync(HttpRequestMessage request, CancellationToken cancellationToken);
     }

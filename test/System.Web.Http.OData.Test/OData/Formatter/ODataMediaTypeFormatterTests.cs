@@ -609,7 +609,7 @@ namespace System.Web.Http.OData.Formatter
                 () => formatter
                     .WriteToStreamAsync(typeof(int), edmObject.Object, new MemoryStream(), new Mock<HttpContent>().Object, transportContext: null)
                     .Wait(),
-                "The EDM type of the object of type 'System.Int32' is null. The EDM type of an IEdmObject cannot be null.");
+                "The EDM type of the object of type 'Castle.Proxies.IEdmObjectProxy' is null. The EDM type of an IEdmObject cannot be null.");
         }
 
         [Fact]
@@ -735,6 +735,17 @@ namespace System.Web.Http.OData.Formatter
         protected override ODataMediaTypeFormatter CreateFormatter()
         {
             return CreateFormatterWithRequest();
+        }
+
+        protected override Mock<ODataMediaTypeFormatter> CreateMockFormatter()
+        {
+            var model = CreateModel();
+            var request = CreateFakeODataRequest(model);
+            ODataPayloadKind[] payloadKinds = new ODataPayloadKind[] { ODataPayloadKind.Property };
+            var formatter = new Mock<ODataMediaTypeFormatter>(payloadKinds) { CallBase = true };
+            formatter.Object.Request = request;
+
+            return formatter;
         }
 
         protected override MediaTypeHeaderValue CreateSupportedMediaType()

@@ -99,6 +99,124 @@ namespace System.Web.Mvc.Html
             return DropDownListHelper(htmlHelper, metadata, ExpressionHelper.GetExpressionText(expression), selectList, optionLabel, htmlAttributes);
         }
 
+        [SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures",
+            Justification = "This is an appropriate nesting of generic types")]
+        public static MvcHtmlString EnumDropDownListFor<TModel, TEnum>(this HtmlHelper<TModel> htmlHelper,
+            Expression<Func<TModel, TEnum>> expression)
+        {
+            return EnumDropDownListFor(htmlHelper, expression, optionLabel: null);
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures",
+            Justification = "This is an appropriate nesting of generic types")]
+        public static MvcHtmlString EnumDropDownListFor<TModel, TEnum>(this HtmlHelper<TModel> htmlHelper,
+            Expression<Func<TModel, TEnum>> expression, object htmlAttributes)
+        {
+            return EnumDropDownListFor(htmlHelper, expression, optionLabel: null, htmlAttributes: htmlAttributes);
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures",
+            Justification = "This is an appropriate nesting of generic types")]
+        public static MvcHtmlString EnumDropDownListFor<TModel, TEnum>(this HtmlHelper<TModel> htmlHelper,
+            Expression<Func<TModel, TEnum>> expression, IDictionary<string, object> htmlAttributes)
+        {
+            return EnumDropDownListFor(htmlHelper, expression, optionLabel: null, htmlAttributes: htmlAttributes);
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures",
+            Justification = "This is an appropriate nesting of generic types")]
+        public static MvcHtmlString EnumDropDownListFor<TModel, TEnum>(this HtmlHelper<TModel> htmlHelper,
+            Expression<Func<TModel, TEnum>> expression, string optionLabel)
+        {
+            return EnumDropDownListFor(htmlHelper, expression, optionLabel, (IDictionary<string, object>)null);
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures",
+            Justification = "This is an appropriate nesting of generic types")]
+        public static MvcHtmlString EnumDropDownListFor<TModel, TEnum>(this HtmlHelper<TModel> htmlHelper,
+            Expression<Func<TModel, TEnum>> expression, string optionLabel, object htmlAttributes)
+        {
+            return EnumDropDownListFor(htmlHelper, expression, optionLabel,
+                HtmlHelper.AnonymousObjectToHtmlAttributes(htmlAttributes));
+        }
+
+        // Unable to constrain TEnum.  Cannot include IComparable, IConvertible, IFormattable because Nullable<T> does
+        // not implement those interfaces (and Int32 does).  Enum alone is not compatible with expression restrictions
+        // because that requires a cast from all enum types.  And the struct generic constraint disallows passing a
+        // Nullable<T> expression.
+        [SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures",
+            Justification = "This is an appropriate nesting of generic types")]
+        public static MvcHtmlString EnumDropDownListFor<TModel, TEnum>(this HtmlHelper<TModel> htmlHelper,
+            Expression<Func<TModel, TEnum>> expression, string optionLabel, IDictionary<string, object> htmlAttributes)
+        {
+            if (expression == null)
+            {
+                throw Error.ArgumentNull("expression");
+            }
+
+            ModelMetadata metadata = ModelMetadata.FromLambdaExpression(expression, htmlHelper.ViewData);
+            if (metadata == null)
+            {
+                throw Error.Argument("expression", MvcResources.SelectExtensions_InvalidExpressionParameterNoMetadata,
+                    expression.ToString());
+            }
+
+            if (metadata.ModelType == null)
+            {
+                throw Error.Argument("expression", MvcResources.SelectExtensions_InvalidExpressionParameterNoModelType,
+                    expression.ToString());
+            }
+
+            if (!EnumHelper.IsValidForEnumHelper(metadata.ModelType))
+            {
+                string formatString;
+                if (EnumHelper.HasFlags(metadata.ModelType))
+                {
+                    formatString = MvcResources.SelectExtensions_InvalidExpressionParameterTypeHasFlags;
+                }
+                else
+                {
+                    formatString = MvcResources.SelectExtensions_InvalidExpressionParameterType;
+                }
+
+                throw Error.Argument("expression", formatString, metadata.ModelType.FullName, "Flags");
+            }
+
+            // Run through same processing as SelectInternal() to determine selected value and ensure it is included
+            // in the select list.
+            string expressionName = ExpressionHelper.GetExpressionText(expression);
+            string expressionFullName =
+                htmlHelper.ViewContext.ViewData.TemplateInfo.GetFullHtmlFieldName(expressionName);
+            Enum currentValue = null;
+            if (!String.IsNullOrEmpty(expressionFullName))
+            {
+                currentValue = htmlHelper.GetModelStateValue(expressionFullName, metadata.ModelType) as Enum;
+            }
+
+            if (currentValue == null && !String.IsNullOrEmpty(expressionName))
+            {
+                // Ignore any select list (enumerable with this name) in the view data
+                currentValue = htmlHelper.ViewData.Eval(expressionName) as Enum;
+            }
+
+            if (currentValue == null)
+            {
+                currentValue = metadata.Model as Enum;
+            }
+
+            IList<SelectListItem> selectList = EnumHelper.GetSelectList(metadata.ModelType, currentValue);
+            if (!String.IsNullOrEmpty(optionLabel) && selectList.Count != 0 && String.IsNullOrEmpty(selectList[0].Text))
+            {
+                // Were given an optionLabel and the select list has a blank initial slot.  Combine.
+                selectList[0].Text = optionLabel;
+
+                // Use the option label just once; don't pass it down the lower-level helpers.
+                optionLabel = null;
+            }
+
+            return DropDownListHelper(htmlHelper, metadata, expressionName, selectList, optionLabel, htmlAttributes);
+        }
+
         private static MvcHtmlString DropDownListHelper(HtmlHelper htmlHelper, ModelMetadata metadata, string expression, IEnumerable<SelectListItem> selectList, string optionLabel, IDictionary<string, object> htmlAttributes)
         {
             return SelectInternal(htmlHelper, metadata, optionLabel, expression, selectList, allowMultiple: false, htmlAttributes: htmlAttributes);
@@ -233,6 +351,12 @@ namespace System.Web.Mvc.Html
 
             IEnumerable<string> values = from object value in defaultValues
                                          select Convert.ToString(value, CultureInfo.CurrentCulture);
+
+            // ToString() by default returns an enum value's name.  But selectList may use numeric values.
+            IEnumerable<string> enumValues = from Enum value in defaultValues.OfType<Enum>()
+                                             select value.ToString("d");
+            values = values.Concat(enumValues);
+
             HashSet<string> selectedValues = new HashSet<string>(values, StringComparer.OrdinalIgnoreCase);
             List<SelectListItem> newSelectList = new List<SelectListItem>();
 
@@ -244,7 +368,9 @@ namespace System.Web.Mvc.Html
             return newSelectList;
         }
 
-        private static MvcHtmlString SelectInternal(this HtmlHelper htmlHelper, ModelMetadata metadata, string optionLabel, string name, IEnumerable<SelectListItem> selectList, bool allowMultiple, IDictionary<string, object> htmlAttributes)
+        private static MvcHtmlString SelectInternal(this HtmlHelper htmlHelper, ModelMetadata metadata,
+            string optionLabel, string name, IEnumerable<SelectListItem> selectList, bool allowMultiple,
+            IDictionary<string, object> htmlAttributes)
         {
             string fullName = htmlHelper.ViewContext.ViewData.TemplateInfo.GetFullHtmlFieldName(name);
             if (String.IsNullOrEmpty(fullName))
@@ -265,9 +391,16 @@ namespace System.Web.Mvc.Html
 
             // If we haven't already used ViewData to get the entire list of items then we need to
             // use the ViewData-supplied value before using the parameter-supplied value.
-            if (!usedViewData && defaultValue == null && !String.IsNullOrEmpty(name))
+            if (defaultValue == null && !String.IsNullOrEmpty(name))
             {
-                defaultValue = htmlHelper.ViewData.Eval(name);
+                if (!usedViewData)
+                {
+                    defaultValue = htmlHelper.ViewData.Eval(name);
+                }
+                else if (metadata != null)
+                {
+                    defaultValue = metadata.Model;
+                }
             }
 
             if (defaultValue != null)

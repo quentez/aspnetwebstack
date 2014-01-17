@@ -81,7 +81,7 @@ namespace System.Net.Http
         /// Reads all body parts within a MIME multipart message into memory using a <see cref="MultipartMemoryStreamProvider"/>.
         /// </summary>
         /// <param name="content">An existing <see cref="HttpContent"/> instance to use for the object's content.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="Task{T}"/> representing the tasks of getting the result of reading the MIME content.</returns>
         public static Task<MultipartMemoryStreamProvider> ReadAsMultipartAsync(this HttpContent content, CancellationToken cancellationToken)
         {
@@ -108,7 +108,7 @@ namespace System.Net.Http
         /// <typeparam name="T">The <see cref="MultipartStreamProvider"/> with which to process the data.</typeparam>
         /// <param name="content">An existing <see cref="HttpContent"/> instance to use for the object's content.</param>
         /// <param name="streamProvider">A stream provider providing output streams for where to write body parts as they are parsed.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="Task{T}"/> representing the tasks of getting the result of reading the MIME content.</returns>
         public static Task<T> ReadAsMultipartAsync<T>(this HttpContent content, T streamProvider, CancellationToken cancellationToken)
             where T : MultipartStreamProvider
@@ -139,7 +139,7 @@ namespace System.Net.Http
         /// <param name="content">An existing <see cref="HttpContent"/> instance to use for the object's content.</param>
         /// <param name="streamProvider">A stream provider providing output streams for where to write body parts as they are parsed.</param>
         /// <param name="bufferSize">Size of the buffer used to read the contents.</param>
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="Task{T}"/> representing the tasks of getting the result of reading the MIME content.</returns>
         public static async Task<T> ReadAsMultipartAsync<T>(this HttpContent content, T streamProvider, int bufferSize,
             CancellationToken cancellationToken) where T : MultipartStreamProvider
@@ -169,20 +169,17 @@ namespace System.Net.Http
                 throw new IOException(Properties.Resources.ReadAsMimeMultipartErrorReading, e);
             }
 
-            using (stream)
+            using (var parser = new MimeMultipartBodyPartParser(content, streamProvider))
             {
-                using (var parser = new MimeMultipartBodyPartParser(content, streamProvider))
-                {
-                    byte[] data = new byte[bufferSize];
-                    MultipartAsyncContext context = new MultipartAsyncContext(stream, parser, data, streamProvider.Contents);
+                byte[] data = new byte[bufferSize];
+                MultipartAsyncContext context = new MultipartAsyncContext(stream, parser, data, streamProvider.Contents);
 
-                    // Start async read/write loop
-                    await MultipartReadAsync(context, cancellationToken);
+                // Start async read/write loop
+                await MultipartReadAsync(context, cancellationToken);
 
-                    // Let the stream provider post-process when everything is complete
-                    await streamProvider.ExecutePostProcessingAsync(cancellationToken);
-                    return streamProvider;
-                }
+                // Let the stream provider post-process when everything is complete
+                await streamProvider.ExecutePostProcessingAsync(cancellationToken);
+                return streamProvider;
             }
         }
 

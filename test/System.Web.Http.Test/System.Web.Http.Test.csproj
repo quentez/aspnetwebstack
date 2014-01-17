@@ -9,7 +9,6 @@
     <AssemblyName>System.Web.Http.Test</AssemblyName>
     <OutputPath>..\..\bin\$(Configuration)\Test\</OutputPath>
     <DefineConstants>$(DefineConstants);ASPNETWEBAPI</DefineConstants>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Moq, Version=4.0.10827.0, Culture=neutral, PublicKeyToken=69f491c39445e920, processorArchitecture=MSIL">
@@ -59,6 +58,12 @@
     <Compile Include="..\Common\PrefixContainerTest.cs">
       <Link>Common\PrefixContainerTest.cs</Link>
     </Compile>
+    <Compile Include="..\Common\Routing\RouteFactoryAttributeTests.cs">
+      <Link>Routing\RouteFactoryAttributeTests.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RoutePrecedenceTests.cs">
+      <Link>Routing\RoutePrecedenceTests.cs</Link>
+    </Compile>
     <Compile Include="..\Common\TaskHelpersExtensionsTest.cs">
       <Link>Common\TaskHelpersExtensionsTest.cs</Link>
     </Compile>
@@ -76,6 +81,7 @@
     <Compile Include="Batch\BatchHttpRequestContextTests.cs" />
     <Compile Include="Batch\HttpBatchHandlerTest.cs" />
     <Compile Include="Batch\DefaultHttpBatchHandlerTest.cs" />
+    <Compile Include="Common\TraceWriterExceptionMapperTest.cs" />
     <Compile Include="Controllers\ActionFilterResultTests.cs" />
     <Compile Include="Controllers\ApiControllerTestabilityTest.cs" />
     <Compile Include="Controllers\Apis\User.cs" />
@@ -94,10 +100,27 @@
     <Compile Include="Controllers\HttpConfigurationTest.cs" />
     <Compile Include="Controllers\VoidResultConverterTest.cs" />
     <Compile Include="Description\ApiExplorerTest.cs" />
+    <Compile Include="Description\ApiParameterDescriptionTest.cs" />
+    <Compile Include="ExceptionHandling\CompositeExceptionLoggerTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionContextCatchBlockTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionLoggerExtensionsTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionLoggerContextTests.cs" />
+    <Compile Include="ExceptionHandling\DefaultExceptionHandlerTests.cs" />
+    <Compile Include="ExceptionHandling\EmptyExceptionHandlerTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionCatchBlocksTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionContextTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionHandlerContextTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionHandlerExtensionsTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionHandlerTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionLoggerTests.cs" />
+    <Compile Include="ExceptionHandling\ExceptionServicesTests.cs" />
+    <Compile Include="ExceptionHandling\LastChanceExceptionHandlerTests.cs" />
     <Compile Include="Filters\HttpAuthenticationChallengeContextTests.cs" />
     <Compile Include="Filters\HttpAuthenticationContextTests.cs" />
     <Compile Include="Hosting\HttpMessageHandlerExtensions.cs" />
     <Compile Include="Hosting\SuppressHostPrincipalMessageHandlerTest.cs" />
+    <Compile Include="HttpMessageHandlerExtensions.cs" />
+    <Compile Include="HttpRouteCollectionTest.cs" />
     <Compile Include="Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -156,6 +179,7 @@
     </Compile>
     <Compile Include="ModelBinding\FormDataCollectionExtensionsTest.cs" />
     <Compile Include="ModelBinding\ModelBinderAttributeTest.cs" />
+    <Compile Include="Routing\AttributeRoutingMapperTests.cs" />
     <Compile Include="Routing\AttributeRoutingTest.cs" />
     <Compile Include="..\Common\Routing\RouteConstraintsTests.cs">
       <Link>Routing\RouteConstraintsTests.cs</Link>
@@ -166,17 +190,18 @@
     <Compile Include="..\Common\Routing\InlineRouteTemplateParserTests.cs">
       <Link>Routing\InlineRouteTemplateParserTests.cs</Link>
     </Compile>
-    <Compile Include="..\Common\Routing\RouteEntryTest.cs">
-      <Link>Routing\RouteEntryTest.cs</Link>
+    <Compile Include="..\Common\Routing\DirectRouteBuilderTests.cs">
+      <Link>Routing\DirectRouteBuilderTests.cs</Link>
     </Compile>
-    <Compile Include="Routing\GenerateRouteTest.cs" />
-    <Compile Include="Routing\HttpDirectRouteTest.cs" />
-    <Compile Include="Routing\HttpParsedRouteTests.cs" />
-    <Compile Include="Routing\HttpRouteBuilderTest.cs" />
+    <Compile Include="Routing\LinkGenerationRouteTests.cs" />
+    <Compile Include="Routing\DirectRouteProviderContextTests.cs" />
     <Compile Include="Routing\HttpRouteValueDictionaryTest.cs" />
     <Compile Include="Routing\HttpRouteTest.cs" />
     <Compile Include="Routing\MediaTypeFormatterExtensionsTests.cs" />
     <Compile Include="Routing\RouteAttributeTests.cs" />
+    <Compile Include="..\Common\Routing\SubRouteCollectionTest.cs">
+      <Link>Routing\SubRouteCollectionTest.cs</Link>
+    </Compile>
     <Compile Include="Routing\UriPathExtensionMappingTests.cs" />
     <Compile Include="Routing\UrlHelperTest.cs" />
     <Compile Include="Services\ControllerServicesTests.cs" />
@@ -193,6 +218,7 @@
     <Compile Include="Tracing\TracerCorrectnessTest.cs" />
     <Compile Include="Tracing\TraceRecordComparer.cs" />
     <Compile Include="Tracing\Tracers\BufferedMediaTypeFormatterTracerTest.cs" />
+    <Compile Include="Tracing\Tracers\DefaultHttpControllerTypeResolverTracerTest.cs" />
     <Compile Include="Tracing\Tracers\OverrideFilterTracerTests.cs" />
     <Compile Include="Tracing\Tracers\AuthenticationFilterTracerTests.cs" />
     <Compile Include="Tracing\Tracers\ReadWriteMediaTypeFormatterTracerTestBase.cs" />
@@ -353,6 +379,8 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
+  <ItemGroup>
+    <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
 </Project>

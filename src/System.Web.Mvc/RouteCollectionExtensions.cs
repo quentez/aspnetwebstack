@@ -2,8 +2,11 @@
 
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Contracts;
+using System.Web.Mvc.Properties;
 using System.Web.Mvc.Routing;
 using System.Web.Routing;
+using System.Web.WebPages;
 
 namespace System.Web.Mvc
 {
@@ -122,8 +125,10 @@ namespace System.Web.Mvc
 
             IgnoreRouteInternal route = new IgnoreRouteInternal(url)
             {
-                Constraints = new RouteValueDictionary(constraints)
+                Constraints = CreateRouteValueDictionaryUncached(constraints)
             };
+
+            ConstraintValidation.Validate(route);
 
             routes.Add(route);
         }
@@ -172,10 +177,12 @@ namespace System.Web.Mvc
 
             Route route = new Route(url, new MvcRouteHandler())
             {
-                Defaults = CreateRouteValueDictionary(defaults),
-                Constraints = CreateRouteValueDictionary(constraints),
+                Defaults = CreateRouteValueDictionaryUncached(defaults),
+                Constraints = CreateRouteValueDictionaryUncached(constraints),
                 DataTokens = new RouteValueDictionary()
             };
+
+            ConstraintValidation.Validate(route);
 
             if ((namespaces != null) && (namespaces.Length > 0))
             {
@@ -187,7 +194,12 @@ namespace System.Web.Mvc
             return route;
         }
 
-        private static RouteValueDictionary CreateRouteValueDictionary(object values)
+        /// <summary>
+        /// The callers to this method are used at startup only, thus it's a bit better to use
+        /// the uncached method because it will run faster for the first few times, and will not
+        /// consume memory long term.
+        /// </summary>
+        private static RouteValueDictionary CreateRouteValueDictionaryUncached(object values)
         {
             var dictionary = values as IDictionary<string, object>;
             if (dictionary != null)
@@ -195,7 +207,7 @@ namespace System.Web.Mvc
                 return new RouteValueDictionary(dictionary);
             }
 
-            return new RouteValueDictionary(values);
+            return TypeHelper.ObjectToDictionaryUncached(values);
         }
 
         private sealed class IgnoreRouteInternal : Route

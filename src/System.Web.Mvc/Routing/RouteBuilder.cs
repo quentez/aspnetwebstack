@@ -8,8 +8,12 @@ using System.Web.Routing;
 namespace System.Web.Mvc.Routing
 {
     /// <summary>
-    /// Builds <see cref="Route"/> instances based on route information.
+    /// Obsolete, use <see cref="System.Web.Mvc.Routing.RouteFactoryAttribute"/> to customize generated attribute
+    /// routes.
     /// </summary>
+    [Obsolete(
+        "Obsolete, do not use. To create custom Routes with attribute routing, use " +
+        "System.Web.Mvc.Routing.RouteFactoryAttribute")]
     public class RouteBuilder
     {
         /// <summary>
@@ -67,7 +71,6 @@ namespace System.Web.Mvc.Routing
             Type controllerType = controllerDescriptor.ControllerType;
 
             RouteValueDictionary dataTokens = new RouteValueDictionary();
-            dataTokens[RouteDataTokenKeys.DirectRouteToController] = controllerDescriptor;
             if (areaName != null)
             {
                 dataTokens.Add(RouteDataTokenKeys.Area, areaName);
@@ -170,7 +173,6 @@ namespace System.Web.Mvc.Routing
                 DataTokens = dataTokens
             };
 
-            route.SetTargetActionMethod(targetMethod);
             return route;
         }
     }

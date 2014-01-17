@@ -1,0 +1,3 @@
+﻿{
+  "@odata.context":"http://localhost/#Edm.Duration","@odata.type":"Edm.Duration","value":"PT1H"
+}

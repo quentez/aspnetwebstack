@@ -23,7 +23,7 @@ namespace System.Web.Http.ValueProviders.Providers
         {
             // Act & assert
             Assert.ThrowsArgumentNull(
-                () => new NameValuePairsValueProvider(values: null, culture: CultureInfo.InvariantCulture),
+                () => new NameValuePairsValueProvider(values: (IEnumerable<KeyValuePair<string, string>>)null, culture: CultureInfo.InvariantCulture),
                 "values");
 
             Assert.ThrowsArgumentNull(

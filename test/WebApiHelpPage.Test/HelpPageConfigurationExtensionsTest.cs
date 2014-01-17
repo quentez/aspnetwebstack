@@ -48,6 +48,42 @@ namespace WebApiHelpPageWebHost.UnitTest
         }
 
         [Theory]
+        [InlineData("Get-Values-Unused")]
+        [InlineData("get-values-unused")]
+        [InlineData("Get-Values-Unused_Name")]
+        [InlineData("get-values-unused_NAME")]
+        [InlineData("Get-Values-Unused-id")]
+        [InlineData("Get-Values-unused-ID")]
+        [InlineData("Post-Values-Unused")]
+        [InlineData("POST-VALUES-UNUSED")]
+        [InlineData("Put-Values-Unused-id")]
+        [InlineData("Put-VALUES-UNUSED-ID")]
+        [InlineData("Put-Values-Unused")]
+        [InlineData("Put-VALUES-UNUSED")]
+        [InlineData("Delete-Values-Unused-id")]
+        [InlineData("Delete-VALUES-UNUSED-id")]
+        [InlineData("Patch-Values-Unused")]
+        [InlineData("Patch-VALUES-UNUSED")]
+        [InlineData("Options-Values-Unused")]
+        [InlineData("OpTions-VALUES-UNUSED")]
+        [InlineData("Head-Values-Unused-id")]
+        [InlineData("HEAD-VALUES-UNUSED-id")]
+        public void GetHelpPageApiModel_ReturnsTheModel_WhenIdIsValid_UnusedParameters(string apiId)
+        {
+            // Arrange
+            HttpConfiguration config = new HttpConfiguration();
+            config.Routes.MapHttpRoute("Default", "{controller}/{unused}/{id}", new { id = RouteParameter.Optional });
+
+            // Act
+            HelpPageApiModel model = config.GetHelpPageApiModel(apiId);
+
+            // Assert
+            Assert.NotNull(model);
+            Assert.Same(model, config.GetHelpPageApiModel(apiId));
+            Assert.Equal(apiId, model.ApiDescription.GetFriendlyId(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        [Theory]
         [InlineData("foo")]
         [InlineData("bar")]
         [InlineData("@alpha")]
@@ -83,7 +119,7 @@ namespace WebApiHelpPageWebHost.UnitTest
             HelpPageApiModel model = config.GetHelpPageApiModel("Get-Values");
             Assert.NotNull(model);
             Assert.NotEmpty(model.ErrorMessages);
-            Assert.Equal("An exception has occurred while generating the sample. Exception Message: This is a faulty sample generator.", model.ErrorMessages[0]);
+            Assert.Equal("An exception has occurred while generating the sample. Exception message: This is a faulty sample generator.", model.ErrorMessages[0]);
         }
 
         [Fact]
@@ -98,6 +134,46 @@ namespace WebApiHelpPageWebHost.UnitTest
             Assert.NotNull(model);
             Assert.NotEmpty(model.ErrorMessages);
             Assert.Equal("Failed to generate the sample for media type 'application/x-www-form-urlencoded'. Cannot use formatter 'JQueryMvcFormUrlEncodedFormatter' to write type 'String'.", model.ErrorMessages[0]);
+        }
+
+        [Fact]
+        public void GetHelpPageApiModel_UnwrapsAggregateException()
+        {
+            HttpConfiguration config = new HttpConfiguration();
+            config.Routes.MapHttpRoute("Default", "{controller}/{id}", new { id = RouteParameter.Optional });
+            Mock<HelpPageSampleGenerator> faultyGenerator = new Mock<HelpPageSampleGenerator>();
+            faultyGenerator.Setup(g => g.GetSample(It.IsAny<ApiDescription>(), It.IsAny<SampleDirection>())).Returns(() => { throw new AggregateException(new InvalidOperationException("Sample generator failed.")); });
+            config.SetHelpPageSampleGenerator(faultyGenerator.Object);
+            HelpPageApiModel model = config.GetHelpPageApiModel("Get-Values");
+            Assert.NotNull(model);
+            Assert.NotEmpty(model.ErrorMessages);
+            Assert.Equal("An exception has occurred while generating the sample. Exception message: Sample generator failed.", model.ErrorMessages[0]);
+        }
+
+        [Theory]
+        [InlineData("Post-Users", true)]
+        [InlineData("Post-Values", true)]
+        [InlineData("Put-Values", true)]
+        [InlineData("Get-Values", false)]
+        [InlineData("Get-Users", false)]
+        [InlineData("Get-Values-id", false)]
+        [InlineData("Head-Values-id", false)]
+        public void GetHelpPageApiModel_ReturnsExpectedRequestModelDescription(string apiId, bool hasRequestModelDescription)
+        {
+            HttpConfiguration config = new HttpConfiguration();
+            config.Routes.MapHttpRoute("Default", "{controller}/{id}", new { id = RouteParameter.Optional });
+
+            HelpPageApiModel model = config.GetHelpPageApiModel(apiId);
+
+            Assert.NotNull(model);
+            if (hasRequestModelDescription)
+            {
+                Assert.NotNull(model.RequestModelDescription);
+            }
+            else
+            {
+                Assert.Null(model.RequestModelDescription);
+            }
         }
 
         [Fact]

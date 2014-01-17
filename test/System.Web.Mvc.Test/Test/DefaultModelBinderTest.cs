@@ -1102,6 +1102,94 @@ namespace System.Web.Mvc.Test
             Assert.Equal(4, model.IntReadWrite);
         }
 
+        [Theory]
+        [InlineData(typeof(OverflowException))]
+        [InlineData(typeof(FormatException))]
+        public void BindPropertyReplaceErrorMessages(Type exceptionType)
+        {
+            // Arrange
+            const string propertyName = "IntReadWriteNonNegative";
+            MyModel2 model = new MyModel2() { IntReadWriteNonNegative = 8 };
+            ModelBindingContext bindingContext = new ModelBindingContext()
+            {
+                ModelMetadata = ModelMetadataProviders.Current.GetMetadataForType(() => model, model.GetType()),
+                ValueProvider = new SimpleValueProvider() { { propertyName, null } }
+            };
+
+            Mock<IModelBinder> mockInnerBinder = new Mock<IModelBinder>();
+            mockInnerBinder
+                .Setup(b => b.BindModel(It.IsAny<ControllerContext>(), It.IsAny<ModelBindingContext>()))
+                .Returns(
+                    delegate(ControllerContext cc, ModelBindingContext bc)
+                    {
+                        bc.ModelState.AddModelError(propertyName, new Exception("", (Exception) Activator.CreateInstance(exceptionType)));
+                        bc.ModelState[propertyName].Value = new ValueProviderResult(8, "8", CultureInfo.InvariantCulture);
+                        return 4;
+                    });
+
+            PropertyDescriptor pd = TypeDescriptor.GetProperties(model)[propertyName];
+            DefaultModelBinderHelper helper = new DefaultModelBinderHelper()
+            {
+                Binders = new ModelBinderDictionary()
+                {
+                    { typeof(int), mockInnerBinder.Object }
+                }
+            };
+
+            // Act
+            helper.PublicBindProperty(new ControllerContext(), bindingContext, pd);
+
+            // Assert
+            Assert.False(bindingContext.ModelState.IsValidField(propertyName));
+            var error = Assert.Single(bindingContext.ModelState[propertyName].Errors);
+            Assert.Equal("The value '8' is not valid for " + propertyName + ".", error.ErrorMessage);
+            Assert.Equal(4, model.IntReadWriteNonNegative);
+        }
+
+        [Theory]
+        [InlineData(typeof(MissingMemberException))]
+        [InlineData(typeof(IndexOutOfRangeException))]
+        public void BindPropertyNotShowErrorMessage(Type exceptionType)
+        {
+            // Arrange
+            const string propertyName = "IntReadWriteNonNegative";
+            MyModel2 model = new MyModel2() { IntReadWriteNonNegative = 8 };
+            ModelBindingContext bindingContext = new ModelBindingContext()
+            {
+                ModelMetadata = ModelMetadataProviders.Current.GetMetadataForType(() => model, model.GetType()),
+                ValueProvider = new SimpleValueProvider() { { propertyName, null } }
+            };
+
+            Mock<IModelBinder> mockInnerBinder = new Mock<IModelBinder>();
+            mockInnerBinder
+                .Setup(b => b.BindModel(It.IsAny<ControllerContext>(), It.IsAny<ModelBindingContext>()))
+                .Returns(
+                    delegate(ControllerContext cc, ModelBindingContext bc)
+                    {
+                        bc.ModelState.AddModelError(propertyName, new Exception("", (Exception)Activator.CreateInstance(exceptionType)));
+                        bc.ModelState[propertyName].Value = new ValueProviderResult(8, "8", CultureInfo.InvariantCulture);
+                        return 4;
+                    });
+
+            PropertyDescriptor pd = TypeDescriptor.GetProperties(model)[propertyName];
+            DefaultModelBinderHelper helper = new DefaultModelBinderHelper()
+            {
+                Binders = new ModelBinderDictionary()
+                {
+                    { typeof(int), mockInnerBinder.Object }
+                }
+            };
+
+            // Act
+            helper.PublicBindProperty(new ControllerContext(), bindingContext, pd);
+
+            // Assert
+            Assert.False(bindingContext.ModelState.IsValidField(propertyName));
+            var error = Assert.Single(bindingContext.ModelState[propertyName].Errors);
+            Assert.Equal(String.Empty, error.ErrorMessage);
+            Assert.Equal(4, model.IntReadWriteNonNegative);
+        }
+
         // BindSimpleModel tests
 
         [Fact]
@@ -1326,6 +1414,33 @@ namespace System.Web.Mvc.Test
 
             // Assert
             Assert.IsAssignableFrom<IList<Guid>>(modelObj);
+        }
+
+        [Fact]
+        public void CreateInstanceCreatesModelInstanceForGenericIListWithoutParameterlessConstructor()
+        {
+            // Arrange
+            DefaultModelBinderHelper helper = new DefaultModelBinderHelper();
+
+            // Act
+            // No need for type parameter to have a parameterless constructor
+            object modelObject = helper.PublicCreateModel(null, null, typeof(IList<NoParameterlessCtor>));
+
+            // Assert
+            Assert.IsAssignableFrom<IList<NoParameterlessCtor>>(modelObject);
+        }
+
+        [Fact]
+        public void CreateInstanceThrowsWithoutParameterlessConstructor()
+        {
+            // Arrange
+            DefaultModelBinderHelper helper = new DefaultModelBinderHelper();
+
+            // Act & Assert, confirming type name and full stack are available in Exception
+            MissingMethodException exception = Assert.Throws<MissingMethodException>(
+                () => helper.PublicCreateModel(null, null, typeof(NoParameterlessCtor)),
+                "No parameterless constructor defined for this object. Object type 'System.Web.Mvc.Test.DefaultModelBinderTest+NoParameterlessCtor'.");
+            Assert.Contains("System.Activator.CreateInstance(", exception.ToString());
         }
 
         [Fact]
@@ -2611,6 +2726,7 @@ namespace System.Web.Mvc.Test
         }
 
         [Fact]
+        [ReplaceCulture]
         public void OnModelUpdatedWithValidationAttributeNoValidationMessage()
         {
             // Arrange
@@ -2726,6 +2842,7 @@ namespace System.Web.Mvc.Test
         }
 
         [Fact]
+        [ReplaceCulture]
         public void SetPropertyCreatesValueRequiredErrorIfNecessary()
         {
             // Arrange
@@ -2922,6 +3039,13 @@ namespace System.Web.Mvc.Test
             public string Name { get; set; }
 
             public IEnumerable<string> States { get; set; }
+        }
+
+        private class NoParameterlessCtor
+        {
+            private NoParameterlessCtor()
+            {
+            }
         }
     }
 }

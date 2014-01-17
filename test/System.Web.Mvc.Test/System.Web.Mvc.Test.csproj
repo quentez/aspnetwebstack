@@ -11,7 +11,6 @@
     <DefineConstants>$(DefineConstants);ASPNETMVC</DefineConstants>
     <!-- Temporarily disable Obsolete Warnings as Errors -->
     <NoWarn>0618</NoWarn>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
@@ -29,7 +28,7 @@
     <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Web" />
     <Reference Include="System.Web.Abstractions" />
-    <Reference Include="System.Web.Routing" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="xunit, Version=1.9.1.1600, Culture=neutral, PublicKeyToken=8d05b1bb7a6fdb6c, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\xunit.1.9.1\lib\net20\xunit.dll</HintPath>
@@ -45,14 +44,31 @@
     <Compile Include="..\Common\AttributeListTest.cs">
       <Link>Common\AttributeListTest.cs</Link>
     </Compile>
+    <Compile Include="..\Common\Routing\RouteFactoryAttributeTests.cs">
+      <Link>Routing\RouteFactoryAttributeTests.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RoutePrecedenceTests.cs">
+      <Link>Routing\RoutePrecedenceTests.cs</Link>
+    </Compile>
     <Compile Include="Async\Test\TaskAsyncActionDescriptorTest.cs" />
     <Compile Include="Async\Test\TaskWrapperAsyncResultTest.cs" />
     <Compile Include="Html\Test\DisplayNameExtensionsTest.cs" />
+    <Compile Include="Html\Test\EnumHelperTest.cs" />
     <Compile Include="Html\Test\NameExtensionsTest.cs" />
     <Compile Include="Html\Test\ValueExtensionsTest.cs" />
     <Compile Include="Razor\Test\MvcCSharpRazorCodeGeneratorTest.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Routing\AttributeRoutingLinkGenerationTest.cs" />
     <Compile Include="Routing\AttributeRoutingMapperTest.cs" />
     <Compile Include="Routing\AttributeRoutingTest.cs" />
+    <Compile Include="..\Common\Routing\DirectRouteBuilderTests.cs">
+      <Link>Routing\DirectRouteBuilderTests.cs</Link>
+    </Compile>
+    <Compile Include="Routing\DirectRouteCandidateTest.cs" />
     <Compile Include="Routing\DirectRouteTestHelpers.cs" />
     <Compile Include="Routing\RouteAttributeTests.cs" />
     <Compile Include="..\Common\Routing\RouteConstraintsTests.cs">
@@ -65,8 +81,8 @@
       <Link>Routing\InlineRouteTemplateParserTests.cs</Link>
     </Compile>
     <Compile Include="Routing\RouteCollectionAttributeRoutingExtensionsTests.cs" />
-    <Compile Include="..\Common\Routing\RouteEntryTest.cs">
-      <Link>Routing\RouteEntryTest.cs</Link>
+    <Compile Include="..\Common\Routing\SubRouteCollectionTest.cs">
+      <Link>Routing\SubRouteCollectionTest.cs</Link>
     </Compile>
     <Compile Include="Test\AjaxHelperOfTModelTest.cs" />
     <Compile Include="Test\CancellationTokenModelBinderTest.cs" />
@@ -94,6 +110,11 @@
     <Compile Include="Test\BuildManagerViewEngineTest.cs" />
     <Compile Include="Test\CompareAttributeTest.cs" />
     <Compile Include="Test\CompareAttributeAdapterTest.cs" />
+    <Compile Include="Test\MinLengthAttributeAdapterTest.cs" />
+    <Compile Include="Test\OverrideResultFiltersAttributeTests.cs" />
+    <Compile Include="Test\OverrideAuthenticationAttributeTests.cs" />
+    <Compile Include="Test\OverrideAuthorizationAttributeTests.cs" />
+    <Compile Include="Test\OverrideExceptionFiltersAttributeTests.cs" />
     <Compile Include="Test\DataAnnotationsModelMetadataProviderTestBase.cs" />
     <Compile Include="Test\DataTypeUtilTest.cs" />
     <Compile Include="Test\FilterInfoTest.cs" />
@@ -120,8 +141,11 @@
     <Compile Include="Test\AsyncTimeoutAttributeTest.cs" />
     <Compile Include="Test\ClientDataTypeModelValidatorProviderTest.cs" />
     <Compile Include="Test\ControllerInstanceFilterProviderTest.cs" />
+    <Compile Include="Test\OverrideActionFiltersAttributeTests.cs" />
+    <Compile Include="Test\OverrideFiltersAttributeTests.cs" />
     <Compile Include="Test\PreApplicationStartCodeTest.cs" />
     <Compile Include="Test\RemoteAttributeTest.cs" />
+    <Compile Include="Test\MaxLengthAttributeAdapterTest.cs" />
     <Compile Include="Test\UrlHelperTest.cs" />
     <Compile Include="Test\UrlParameterTest.cs" />
     <Compile Include="Test\ViewStartPageTest.cs" />
@@ -322,6 +346,10 @@
     <Compile Include="Util\SimpleViewDataContainer.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\System.Web.Http\System.Web.Http.csproj">
+      <Project>{DDC1CE0C-486E-4E35-BB3B-EAB61F8F9440}</Project>
+      <Name>System.Web.Http</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\src\System.Web.Mvc\System.Web.Mvc.csproj">
       <Project>{3D3FFD8A-624D-4E9B-954B-E1C105507975}</Project>
       <Name>System.Web.Mvc</Name>
@@ -350,6 +378,14 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
 </Project>

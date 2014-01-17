@@ -15,11 +15,12 @@ namespace System.Web.Http.Owin
         [Fact]
         public void SimpleGet_Works()
         {
-            using (WebApp.Start<OwinHostIntegrationTest>(url: "http://localhost:50232/vroot"))
+            using (var port = new PortReserver())
+            using (WebApp.Start<OwinHostIntegrationTest>(url: CreateBaseUrl(port)))
             {
                 HttpClient client = new HttpClient();
 
-                var response = client.GetAsync("http://localhost:50232/vroot/HelloWorld").Result;
+                var response = client.GetAsync(CreateUrl(port, "HelloWorld")).Result;
 
                 Assert.True(response.IsSuccessStatusCode);
                 Assert.Equal("\"Hello from OWIN\"", response.Content.ReadAsStringAsync().Result);
@@ -30,12 +31,13 @@ namespace System.Web.Http.Owin
         [Fact]
         public void SimplePost_Works()
         {
-            using (WebApp.Start<OwinHostIntegrationTest>(url: "http://localhost:50232/vroot"))
+            using (var port = new PortReserver())
+            using (WebApp.Start<OwinHostIntegrationTest>(url: CreateBaseUrl(port)))
             {
                 HttpClient client = new HttpClient();
                 var content = new StringContent("\"Echo this\"", Encoding.UTF8, "application/json");
 
-                var response = client.PostAsync("http://localhost:50232/vroot/Echo", content).Result;
+                var response = client.PostAsync(CreateUrl(port, "Echo"), content).Result;
 
                 Assert.True(response.IsSuccessStatusCode);
                 Assert.Equal("\"Echo this\"", response.Content.ReadAsStringAsync().Result);
@@ -46,11 +48,12 @@ namespace System.Web.Http.Owin
         [Fact]
         public void GetThatThrowsDuringSerializations_RespondsWith500()
         {
-            using (WebApp.Start<OwinHostIntegrationTest>(url: "http://localhost:50232/vroot"))
+            using (var port = new PortReserver())
+            using (WebApp.Start<OwinHostIntegrationTest>(url: CreateBaseUrl(port)))
             {
                 HttpClient client = new HttpClient();
 
-                var response = client.GetAsync("http://localhost:50232/vroot/Error").Result;
+                var response = client.GetAsync(CreateUrl(port, "Error")).Result;
 
                 Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
                 JObject json = Assert.IsType<JObject>(JToken.Parse(response.Content.ReadAsStringAsync().Result));
@@ -58,6 +61,16 @@ namespace System.Web.Http.Owin
                 Assert.True(json.TryGetValue("ExceptionMessage", out exceptionMessage));
                 Assert.Null(response.Headers.TransferEncodingChunked);
             }
+        }
+
+        private static string CreateBaseUrl(PortReserver port)
+        {
+            return port.BaseUri + "vroot";
+        }
+
+        private static string CreateUrl(PortReserver port, string localPath)
+        {
+            return CreateBaseUrl(port) + "/" + localPath;
         }
 
         public void Configuration(IAppBuilder appBuilder)

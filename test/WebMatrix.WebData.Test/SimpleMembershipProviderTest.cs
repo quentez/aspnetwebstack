@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Security.Cryptography;
@@ -168,6 +169,89 @@ namespace WebMatrix.WebData.Test
             // Assert
             Assert.Equal("fGH/eKcjvW//P+5BOEW1", Convert.ToBase64String(generatedBytes));
             Assert.Equal("fGH_eKcjvW__P-5BOEW1AA2", result);
+        }
+
+        [Fact]
+        public void GetUserId_WithCaseNormalization()
+        {
+            // Arrange
+            var database = new Mock<MockDatabase>(MockBehavior.Strict);
+            var expectedQuery = @"SELECT userId FROM users WHERE (UPPER(userName) = UPPER(@0))";
+            database.Setup(d => d.QueryValue(expectedQuery, "zeke")).Returns(999);
+
+            // Act
+            var result = SimpleMembershipProvider.GetUserId(
+                database.Object, 
+                "users", 
+                "userName", 
+                "userId", 
+                SimpleMembershipProviderCasingBehavior.NormalizeCasing, 
+                "zeke");
+
+            // Assert
+            Assert.Equal<int>(999, result);
+        }
+
+        [Fact]
+        public void GetUserId_WithoutCaseNormalization()
+        {
+            // Arrange
+            var database = new Mock<MockDatabase>(MockBehavior.Strict);
+            var expectedQuery = @"SELECT userId FROM users WHERE (userName = @0)";
+            database.Setup(d => d.QueryValue(expectedQuery, "zeke")).Returns(999);
+
+            // Act
+            var result = SimpleMembershipProvider.GetUserId(
+                database.Object,
+                "users",
+                "userName",
+                "userId",
+                SimpleMembershipProviderCasingBehavior.RelyOnDatabaseCollation,
+                "zeke");
+
+            // Assert
+            Assert.Equal<int>(999, result);
+        }
+
+        [Theory]
+        [ReplaceCulture]
+        [InlineData(-1, false)]
+        [InlineData(0, true)]
+        [InlineData(1, true)]
+        [InlineData(2, false)]
+        public void SimpleMembershipProvider_CasingBehavior_ValidatesRange(int value, bool isValid)
+        {
+            // Arrange
+            var provider = new SimpleMembershipProvider();
+
+            var message = 
+                "The value of argument 'value' (" + value + ") is invalid for Enum type " +
+                "'SimpleMembershipProviderCasingBehavior'." + Environment.NewLine +
+                "Parameter name: value";
+            
+            // Act
+            Exception exception = null;
+
+            try
+            {
+                provider.CasingBehavior = (SimpleMembershipProviderCasingBehavior)value;
+            }
+            catch (Exception ex)
+            {
+                exception = ex;
+            }
+
+            // Assert
+            if (isValid)
+            {
+                Assert.Equal((SimpleMembershipProviderCasingBehavior)value, provider.CasingBehavior);
+            }
+            else 
+            {
+                Assert.NotNull(exception);
+                Assert.IsAssignableFrom<InvalidEnumArgumentException>(exception);
+                Assert.Equal(message, exception.Message);
+            }
         }
 
         private static DynamicRecord GetRecord(int userId, string confirmationToken)

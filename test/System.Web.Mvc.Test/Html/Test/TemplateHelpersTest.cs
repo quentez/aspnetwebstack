@@ -348,11 +348,23 @@ namespace System.Web.Mvc.Html.Test
 
         // GetViewNames
 
-        [Fact]
-        public void GetViewNamesFullOrderingOfBuiltInValueType()
+        // Sample value types; some special cases below as well e.g. GetViewNamesFullOrderingOfString()
+        [Theory]
+        [InlineData(typeof(bool), "Boolean")]
+        [InlineData(typeof(byte), "Byte")]
+        [InlineData(typeof(char), "Char")]
+        [InlineData(typeof(DateTime), "DateTime")]
+        [InlineData(typeof(decimal), "Decimal")]
+        [InlineData(typeof(double), "Double")]
+        [InlineData(typeof(float), "Single")]
+        [InlineData(typeof(Guid), "Guid")]
+        [InlineData(typeof(TimeSpan), "TimeSpan")]
+        [InlineData(typeof(int), "Int32")]
+        [InlineData(typeof(ulong), "UInt64")]
+        public void GetViewNamesFullOrderingOfBuiltInValueType(Type type, string expectedTypeName)
         {
             // Arrange
-            ModelMetadata metadata = ModelMetadataProviders.Current.GetMetadataForType(null, typeof(double));
+            ModelMetadata metadata = ModelMetadataProviders.Current.GetMetadataForType(null, type);
 
             // Act
             List<string> result = TemplateHelpers.GetViewNames(metadata, "UIHint", "DataType").ToList();
@@ -361,7 +373,7 @@ namespace System.Web.Mvc.Html.Test
             Assert.Equal(4, result.Count);
             Assert.Equal("UIHint", result[0]);
             Assert.Equal("DataType", result[1]);
-            Assert.Equal("Double", result[2]);
+            Assert.Equal(expectedTypeName, result[2]);
             Assert.Equal("String", result[3]);
         }
 
@@ -435,6 +447,75 @@ namespace System.Web.Mvc.Html.Test
             Assert.Equal("IList`1", result[2]);
             Assert.Equal("Collection", result[3]);
             Assert.Equal("Object", result[4]);
+        }
+
+        [Fact]
+        public void GetViewNamesFullOrderingOfString()
+        {
+            // Arrange
+            ModelMetadata metadata = ModelMetadataProviders.Current.GetMetadataForType(null, typeof(String));
+
+            // Act
+            List<string> result = TemplateHelpers.GetViewNames(metadata, "UIHint", "DataType").ToList();
+
+            // Assert
+            Assert.Equal(3, result.Count);
+            Assert.Equal("UIHint", result[0]);
+            Assert.Equal("DataType", result[1]);
+            Assert.Equal("String", result[2]);
+        }
+
+        [Fact]
+        public void GetViewNamesFullOrderingOfEnumStruct()
+        {
+            // Arrange
+            ModelMetadata metadata = ModelMetadataProviders.Current.GetMetadataForType(null, typeof(StringSplitOptions));
+
+            // Act
+            List<string> result = TemplateHelpers.GetViewNames(metadata, "UIHint", "DataType").ToList();
+
+            // Assert
+            Assert.Equal(5, result.Count);
+            Assert.Equal("UIHint", result[0]);
+            Assert.Equal("DataType", result[1]);
+            Assert.Equal("StringSplitOptions", result[2]);
+            Assert.Equal("Enum", result[3]);
+            Assert.Equal("String", result[4]);
+        }
+
+        [Fact]
+        public void GetViewNamesFullOrderingOfEnumType()
+        {
+            // Arrange
+            ModelMetadata metadata = ModelMetadataProviders.Current.GetMetadataForType(null, typeof(Enum));
+
+            // Act
+            List<string> result = TemplateHelpers.GetViewNames(metadata, "UIHint", "DataType").ToList();
+
+            // Assert
+            Assert.Equal(4, result.Count);
+            Assert.Equal("UIHint", result[0]);
+            Assert.Equal("DataType", result[1]);
+            Assert.Equal("Enum", result[2]);
+            Assert.Equal("String", result[3]);
+        }
+
+        [Fact]
+        public void GetViewNamesFullOrderingOfDateTimeOffset()
+        {
+            // Arrange
+            ModelMetadata metadata = ModelMetadataProviders.Current.GetMetadataForType(null, typeof(DateTimeOffset));
+
+            // Act
+            List<string> result = TemplateHelpers.GetViewNames(metadata, "UIHint", "DataType").ToList();
+
+            // Assert
+            Assert.Equal(5, result.Count);
+            Assert.Equal("UIHint", result[0]);
+            Assert.Equal("DataType", result[1]);
+            Assert.Equal("DateTimeOffset", result[2]);
+            Assert.Equal("DateTime", result[3]);
+            Assert.Equal("String", result[4]);
         }
 
         [Fact]

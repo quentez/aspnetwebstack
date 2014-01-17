@@ -500,7 +500,7 @@ namespace System.Web.Http.Routing
 
         public HttpRouteValueDictionary Match(string virtualPath, HttpRouteValueDictionary defaultValues)
         {
-            IList<string> requestPathSegments = HttpRouteParser.SplitUriToPathSegmentStrings(virtualPath);
+            IList<string> requestPathSegments = RouteParser.SplitUriToPathSegmentStrings(virtualPath);
 
             if (defaultValues == null)
             {
@@ -579,7 +579,7 @@ namespace System.Web.Http.Routing
                     // still contains more content, check that the remaining content is all separators.
                     for (int i = PathSegments.Count; i < requestPathSegments.Count; i++)
                     {
-                        if (!HttpRouteParser.IsSeparator(requestPathSegments[i]))
+                        if (!RouteParser.IsSeparator(requestPathSegments[i]))
                         {
                             return null;
                         }
@@ -836,32 +836,6 @@ namespace System.Web.Http.Routing
         {
             string escape = Uri.EscapeUriString(str);
             return Regex.Replace(escape, "([#?])", new MatchEvaluator(EscapeReservedCharacters));
-        }
-
-        public decimal GetPrecedence(IDictionary<string, object> constraints)
-        {
-            // Each precedence digit corresponds to one decimal place. For example, 3 segments with precedences 2, 1,
-            // and 4 results in a combined precedence of 2.14 (decimal).
-            IList<PathContentSegment> segments = PathSegments.OfType<PathContentSegment>().ToArray();
-
-            decimal precedence = 0;
-            uint divisor = 1; // The first digit occupies the one's place.
-
-            for (int i = 0; i < segments.Count; i++)
-            {
-                PathContentSegment segment = segments[i];
-
-                int digit = HttpRouteEntry.GetPrecedenceDigit(segment, constraints);
-                Contract.Assert(digit >= 0 && digit < 10);
-
-                precedence = precedence + Decimal.Divide(digit, divisor);
-
-                // The next digit occupies the subsequent place (always after the decimal point and growing to the
-                // right).
-                divisor *= 10;
-            }
-
-            return precedence;
         }
     }
 }

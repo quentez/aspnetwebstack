@@ -252,7 +252,8 @@ namespace System.Web.Mvc
                 {
                     for (Exception exception = error.Exception; exception != null; exception = exception.InnerException)
                     {
-                        if (exception is FormatException)
+                        // We only consider "known" type of exception and do not make too aggressive changes here
+                        if (exception is FormatException || exception is OverflowException)
                         {
                             string displayName = propertyMetadata.GetDisplayName();
                             string errorMessageTemplate = GetValueInvalidResource(controllerContext);
@@ -375,6 +376,7 @@ namespace System.Web.Mvc
 
         protected virtual object CreateModel(ControllerContext controllerContext, ModelBindingContext bindingContext, Type modelType)
         {
+            // fallback to the type's default constructor
             Type typeToCreate = modelType;
 
             // we can understand some collection interfaces, e.g. IList<>, IDictionary<,>
@@ -391,8 +393,22 @@ namespace System.Web.Mvc
                 }
             }
 
-            // fallback to the type's default constructor
-            return Activator.CreateInstance(typeToCreate);
+            try
+            {
+                return Activator.CreateInstance(typeToCreate);
+            }
+            catch (MissingMethodException exception)
+            {
+                // Ensure thrown exception contains the type name.  Might be down a few levels.
+                MissingMethodException replacementException =
+                    TypeHelpers.EnsureDebuggableException(exception, typeToCreate.FullName);
+                if (replacementException != null)
+                {
+                    throw replacementException;
+                }
+
+                throw;
+            }
         }
 
         protected static string CreateSubIndexName(string prefix, int index)

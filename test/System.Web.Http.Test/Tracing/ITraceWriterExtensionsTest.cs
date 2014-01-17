@@ -1,7 +1,9 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Web.Http.ModelBinding;
 using Microsoft.TestCommon;
 
 namespace System.Web.Http.Tracing
@@ -651,6 +653,123 @@ namespace System.Web.Http.Tracing
         }
 
         [Fact]
+        public void TraceBeginEnd_Traces_And_Throws_HttpResponseException()
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            HttpRequestMessage request = new HttpRequestMessage();
+            HttpResponseException exception = new HttpResponseException(Net.HttpStatusCode.NotFound);
+            List<TraceRecord> expectedTraces = new List<TraceRecord>
+            {
+                new TraceRecord(request, "testCategory", TraceLevel.Error) { Kind = TraceKind.Begin, Operator = "tester", Operation = "testOp", Message = "beginMessage" },
+                new TraceRecord(request, "testCategory", TraceLevel.Warn) { Kind = TraceKind.End, Operator = "tester", Operation = "testOp", Exception = exception, Message = "errorMessage",
+                    Status = Net.HttpStatusCode.NotFound },
+            };
+
+            // Act
+            Exception thrown = Assert.Throws<HttpResponseException>(
+                                () => traceWriter.TraceBeginEnd(request,
+                                    "testCategory",
+                                    TraceLevel.Error,
+                                    "tester",
+                                    "testOp",
+                                    beginTrace: (tr) => { tr.Message = "beginMessage"; },
+                                    execute: () => { throw exception; },
+                                    endTrace: (tr) => { tr.Message = "won't Happen"; },
+                                    errorTrace: (tr) => { tr.Message = "errorMessage"; }));
+
+            // Assert
+            Assert.Equal<TraceRecord>(expectedTraces, traceWriter.Traces, new TraceRecordComparer());
+            Assert.Same(thrown, exception);
+        }
+
+        [Fact]
+        public void TraceBeginEnd_Traces_And_Throws_AggregateException()
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            HttpRequestMessage request = new HttpRequestMessage();
+            List<TraceRecord> expectedTraces = new List<TraceRecord>
+            {
+                new TraceRecord(request, "testCategory", TraceLevel.Error) { Kind = TraceKind.Begin, Operator = "tester", Operation = "testOp", Message = "beginMessage" },
+                new TraceRecord(request, "testCategory", TraceLevel.Warn)
+                { 
+                    Kind = TraceKind.End, Operator = "tester", Operation = "testOp", Exception = null,
+                    // In the aggregateException, only the httpResponseException with the highest status code will be reflected in the trace record's message.
+                    // In this test case, it should be NotFound.
+                    Message = "UserMessage='The request is invalid.', ModelStateError=[key=[error], username=[invalid]]",
+                    Status = Net.HttpStatusCode.NotFound
+                },
+            };
+
+            // Act
+            // Errors and exceptions are instantiated in the `execute` func to avoid the variation of error messages for culture issues.
+            Exception thrown = Assert.Throws<AggregateException>(
+                                () => traceWriter.TraceBeginEnd(request,
+                                    "testCategory",
+                                    TraceLevel.Error,
+                                    "tester",
+                                    "testOp",
+                                    beginTrace: (tr) => { tr.Message = "beginMessage"; },
+                                    execute: () =>
+                                    {
+                                        AggregateException aggEx = CreateAggregateException(request);
+                                        // To satisfy TraceRecordComparer().
+                                        expectedTraces[1].Exception = aggEx;
+                                        throw aggEx;
+                                    },
+                                    endTrace: (tr) => { tr.Message = "won't Happen"; },
+                                    errorTrace: null));
+
+            // Assert
+            Assert.Equal<TraceRecord>(expectedTraces, traceWriter.Traces, new TraceRecordComparer());
+            Assert.Same(thrown, expectedTraces[1].Exception);
+        }
+
+        private AggregateException CreateAggregateException(HttpRequestMessage request)
+        {
+            HttpError httpError = new HttpError(new ModelStateDictionary()
+                                                {
+                                                    { "key", new ModelState() { Errors = { new ModelError("error") } } },
+                                                    { "username", new ModelState() { Errors = { new ModelError("invalid") } } },
+                                                }, true);
+            HttpResponseException hre = new HttpResponseException(request.CreateErrorResponse(Net.HttpStatusCode.BadRequest, new HttpError("Error Message from HRE.")));
+            Exception nestedHre = new Exception("Level 1", new Exception("Level 2", new HttpResponseException(request.CreateErrorResponse(Net.HttpStatusCode.NotFound, httpError))));
+            List<Exception> exceptions = new List<Exception>();
+            exceptions.Add(hre);
+            exceptions.Add(nestedHre);
+            return new AggregateException(exceptions);
+        }
+
+        [Fact]
+        public void TraceBeginEnd_Does_Not_Trace_HttpResponseException_When_Tracing_Only_Higher_Level()
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            traceWriter.TraceSelector = (rqst, category, level) => level >= TraceLevel.Error;
+            HttpRequestMessage request = new HttpRequestMessage();
+            bool invoked = false;
+            Exception exception = new HttpResponseException(Net.HttpStatusCode.NotFound);
+
+            // Act
+            Exception thrown = Assert.Throws<HttpResponseException>(
+                                () => traceWriter.TraceBeginEnd(request,
+                                "",
+                                TraceLevel.Info,
+                                "",
+                                "",
+                                beginTrace: (tr) => { invoked = true; },
+                                execute: () => { throw exception; },
+                                endTrace: (tr) => { },
+                                errorTrace: (tr) => { }));
+
+            // Assert
+            Assert.False(invoked);
+            Assert.Empty(traceWriter.Traces);
+            Assert.Same(thrown, exception);
+        }
+
+        [Fact]
         public void TraceBeginEndAsync_Throws_With_Null_This()
         {
             // Arrange
@@ -755,6 +874,65 @@ namespace System.Web.Http.Tracing
 
             // Assert
             Assert.False(invoked);
+        }
+
+        [Fact]
+        public void TraceBeginEndAsync_Traces_And_Throws_HttpResponseException()
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            HttpRequestMessage request = new HttpRequestMessage();
+            HttpResponseException exception = new HttpResponseException(Net.HttpStatusCode.InternalServerError);
+            List<TraceRecord> expectedTraces = new List<TraceRecord>
+            {
+                new TraceRecord(request, "testCategory", TraceLevel.Info) { Kind = TraceKind.Begin, Operator = "tester", Operation = "testOp", Message = "beginMessage" },
+                new TraceRecord(request, "testCategory", TraceLevel.Error) { Kind = TraceKind.End, Operator = "tester", Operation = "testOp", Exception = exception, Message = "errorMessage",
+                    Status = Net.HttpStatusCode.InternalServerError },
+            };
+
+            // Act
+            Exception thrown = Assert.Throws<HttpResponseException>(
+                                () => traceWriter.TraceBeginEndAsync(request,
+                                    "testCategory",
+                                    TraceLevel.Info,
+                                    "tester",
+                                    "testOp",
+                                    beginTrace: (tr) => { tr.Message = "beginMessage"; },
+                                    execute: () => { throw exception; },
+                                    endTrace: (tr) => { tr.Message = "won't Happen"; },
+                                    errorTrace: (tr) => { tr.Message = "errorMessage"; }).Wait());
+
+            // Assert
+            Assert.Equal<TraceRecord>(expectedTraces, traceWriter.Traces, new TraceRecordComparer());
+            Assert.Same(thrown, exception);
+        }
+
+        [Fact]
+        public void TraceBeginEndAsync_Does_Not_Trace_HttpResponseException_When_Tracing_Only_Higher_Level()
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            traceWriter.TraceSelector = (rqst, category, level) => level >= TraceLevel.Error;
+            HttpRequestMessage request = new HttpRequestMessage();
+            bool invoked = false;
+            Exception exception = new HttpResponseException(Net.HttpStatusCode.NotFound);
+
+            // Act
+            Exception thrown = Assert.Throws<HttpResponseException>(
+                                () => traceWriter.TraceBeginEndAsync(request,
+                                "",
+                                TraceLevel.Info,
+                                "",
+                                "",
+                                beginTrace: (tr) => { invoked = true; },
+                                execute: () => TaskHelpers.FromError(exception),
+                                endTrace: (tr) => { },
+                                errorTrace: (tr) => { }).Wait());
+
+            // Assert
+            Assert.False(invoked);
+            Assert.Empty(traceWriter.Traces);
+            Assert.Same(thrown, exception);
         }
 
         [Fact]
@@ -1026,6 +1204,59 @@ namespace System.Web.Http.Tracing
             Assert.Equal<TraceRecord>(expectedTraces, traceWriter.Traces, new TraceRecordComparer());
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TraceBeginEndAsync_Traces_And_Throws_AggregateException(bool isExThrownAtExecution)
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            HttpRequestMessage request = new HttpRequestMessage();
+            List<TraceRecord> expectedTraces = new List<TraceRecord>
+            {
+                new TraceRecord(request, "testCategory", TraceLevel.Error) { Kind = TraceKind.Begin, Operator = "tester", Operation = "testOp", Message = "beginMessage" },
+                new TraceRecord(request, "testCategory", TraceLevel.Warn)
+                { 
+                    Kind = TraceKind.End, Operator = "tester", Operation = "testOp", Exception = null,
+                    // In the aggregateException, only the httpResponseException with the highest status code will be reflected in the trace record's message.
+                    // In this test case, it should be NotFound.
+                    Message = "UserMessage='The request is invalid.', ModelStateError=[key=[error], username=[invalid]]",
+                    Status = Net.HttpStatusCode.NotFound
+                },
+            };
+
+            // Act
+            // Errors and exceptions are instantiated in the `execute` func to avoid the variation of error messages for culture issues.
+            Exception thrown = Assert.Throws<AggregateException>(
+                                () => traceWriter.TraceBeginEndAsync(request,
+                                    "testCategory",
+                                    TraceLevel.Error,
+                                    "tester",
+                                    "testOp",
+                                    beginTrace: (tr) => { tr.Message = "beginMessage"; },
+                                    execute: () =>
+                                    {
+                                        AggregateException aggEx = CreateAggregateException(request);
+                                        Task task = new Task(() => { throw aggEx; });
+
+                                        // To satisfy TraceRecordComparer().
+                                        expectedTraces[1].Exception = aggEx;
+
+                                        if (isExThrownAtExecution)
+                                        {
+                                            throw aggEx;
+                                        }
+                                        task.Start();
+                                        return task; 
+                                    },
+                                    endTrace: (tr) => { tr.Message = "won't Happen"; },
+                                    errorTrace: null).Wait());
+
+            // Assert
+            Assert.Equal<TraceRecord>(expectedTraces, traceWriter.Traces, new TraceRecordComparer());
+            Assert.Same(thrown, expectedTraces[1].Exception);
+        }
+
         [Fact]
         public void TraceBeginAsync_Traces_And_Faults_When_Inner_Faults()
         {
@@ -1073,7 +1304,7 @@ namespace System.Web.Http.Tracing
                                              "",
                                              "",
                                              beginTrace: null,
-                                             execute: () => TaskHelpers.FromResult<int>(1),
+                                             execute: () => Task.FromResult<int>(1),
                                              endTrace: null,
                                              errorTrace: null),
                                        "traceWriter");
@@ -1113,7 +1344,7 @@ namespace System.Web.Http.Tracing
                      "",
                      "",
                      beginTrace: null,
-                     execute: () => TaskHelpers.FromResult<int>(1),
+                     execute: () => Task.FromResult<int>(1),
                      endTrace: null,
                      errorTrace: null);
             t.Wait();
@@ -1134,12 +1365,122 @@ namespace System.Web.Http.Tracing
                                  "",
                                  "",
                                  beginTrace: (tr) => { invoked = true; },
-                                 execute: () => TaskHelpers.FromResult<int>(1),
+                                 execute: () => Task.FromResult<int>(1),
                                  endTrace: (tr, value) => { },
                                  errorTrace: (tr) => { }).Wait();
 
             // Assert
             Assert.True(invoked);
+        }
+
+        [Fact]
+        public void TraceBeginEndAsyncGeneric_Traces_And_Throws_HttpResponseException()
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            HttpRequestMessage request = new HttpRequestMessage();
+            HttpResponseException exception = new HttpResponseException(Net.HttpStatusCode.NotFound);
+            List<TraceRecord> expectedTraces = new List<TraceRecord>
+            {
+                new TraceRecord(request, "testCategory", TraceLevel.Error) { Kind = TraceKind.Begin, Operator = "tester", Operation = "testOp", Message = "beginMessage" },
+                new TraceRecord(request, "testCategory", TraceLevel.Warn) { Kind = TraceKind.End, Operator = "tester", Operation = "testOp", Exception = exception, Message = "errorMessage",
+                    Status = Net.HttpStatusCode.NotFound },
+            };
+
+            // Act
+            Exception thrown = Assert.Throws<HttpResponseException>(
+                                () => traceWriter.TraceBeginEndAsync<int>(request,
+                                    "testCategory",
+                                    TraceLevel.Error,
+                                    "tester",
+                                    "testOp",
+                                    beginTrace: (tr) => { tr.Message = "beginMessage"; },
+                                    execute: () => { throw exception; },
+                                    endTrace: (tr, result) => { tr.Message = "won't Happen"; },
+                                    errorTrace: (tr) => { tr.Message = "errorMessage"; }).Wait());
+
+            // Assert
+            Assert.Equal<TraceRecord>(expectedTraces, traceWriter.Traces, new TraceRecordComparer());
+            Assert.Same(thrown, exception);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void TraceBeginEndAsyncGeneric_Traces_And_Throws_AggregateException(bool isExThrownAtExecution)
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            HttpRequestMessage request = new HttpRequestMessage();
+            List<TraceRecord> expectedTraces = new List<TraceRecord>
+            {
+                new TraceRecord(request, "testCategory", TraceLevel.Error) { Kind = TraceKind.Begin, Operator = "tester", Operation = "testOp", Message = "beginMessage" },
+                new TraceRecord(request, "testCategory", TraceLevel.Warn)
+                { 
+                    Kind = TraceKind.End, Operator = "tester", Operation = "testOp", Exception = null,
+                    // In the aggregateException, only the httpResponseException with the highest status code will be reflected in the trace record's message.
+                    // In this test case, it should be NotFound.
+                    Message = "UserMessage='The request is invalid.', ModelStateError=[key=[error], username=[invalid]]",
+                    Status = Net.HttpStatusCode.NotFound
+                },
+            };
+
+            // Act
+            // Errors and exceptions are instantiated in the `execute` func to avoid the variation of error messages for culture issues.
+            Exception thrown = Assert.Throws<AggregateException>(
+                                () => traceWriter.TraceBeginEndAsync<int>(request,
+                                    "testCategory",
+                                    TraceLevel.Error,
+                                    "tester",
+                                    "testOp",
+                                    beginTrace: (tr) => { tr.Message = "beginMessage"; },
+                                    execute: () =>
+                                    {
+                                        AggregateException aggEx = CreateAggregateException(request);
+                                        Task<int> task = new Task<int>(() => { throw aggEx; });
+
+                                        // To satisfy TraceRecordComparer().
+                                        expectedTraces[1].Exception = aggEx;
+
+                                        if (isExThrownAtExecution)
+                                        {
+                                            throw aggEx;
+                                        }
+                                        task.Start();
+                                        return task; 
+                                    },
+                                    endTrace: (tr, result) => { tr.Message = "won't Happen"; },
+                                    errorTrace: null).Wait());
+
+            // Assert
+            Assert.Equal<TraceRecord>(expectedTraces, traceWriter.Traces, new TraceRecordComparer());
+            Assert.Same(thrown, expectedTraces[1].Exception);
+        }
+
+        [Fact]
+        public void TraceBeginEndAsyncGeneric_Does_Not_Trace_HttpResponseException_When_Tracing_Only_Higher_Level()
+        {
+            // Arrange
+            TestTraceWriter traceWriter = new TestTraceWriter();
+            traceWriter.TraceSelector = (rqst, category, level) => level >= TraceLevel.Error;
+            HttpRequestMessage request = new HttpRequestMessage();
+            bool invoked = false;
+
+            // Act
+            Assert.Throws<HttpResponseException>(
+                () => traceWriter.TraceBeginEndAsync(request,
+                "",
+                TraceLevel.Info,
+                "",
+                "",
+                beginTrace: (tr) => { invoked = true; },
+                execute: () => TaskHelpers.FromError(new HttpResponseException(Net.HttpStatusCode.NotFound)),
+                endTrace: (tr) => { },
+                errorTrace: (tr) => { }).Wait());
+
+            // Assert
+            Assert.False(invoked);
+            Assert.Empty(traceWriter.Traces);
         }
 
         [Fact]
@@ -1158,7 +1499,7 @@ namespace System.Web.Http.Tracing
                                  "",
                                  "",
                                  beginTrace: (tr) => { invoked = true; },
-                                 execute: () => TaskHelpers.FromResult<int>(1),
+                                 execute: () => Task.FromResult<int>(1),
                                  endTrace: (tr, value) => { },
                                  errorTrace: (tr) => { }).Wait();
 
@@ -1184,7 +1525,7 @@ namespace System.Web.Http.Tracing
                                  execute: () =>
                                  {
                                      invoked = true;
-                                     return TaskHelpers.FromResult<int>(1);
+                                     return Task.FromResult<int>(1);
                                  },
                                  endTrace: (tr, value) => { },
                                  errorTrace: (tr) => { }).Result;
@@ -1210,7 +1551,7 @@ namespace System.Web.Http.Tracing
                                  "",
                                  "",
                                  beginTrace: (tr) => { },
-                                 execute: () => TaskHelpers.FromResult<int>(1),
+                                 execute: () => Task.FromResult<int>(1),
                                  endTrace: (tr, value) => { invoked = true; invokedValue = value; },
                                  errorTrace: (tr) => { }).Wait();
 
@@ -1263,7 +1604,7 @@ namespace System.Web.Http.Tracing
                                  "",
                                  "",
                                  beginTrace: (tr) => { },
-                                 execute: () => TaskHelpers.FromResult<int>(1),
+                                 execute: () => Task.FromResult<int>(1),
                                  endTrace: (tr, value) => { invoked = true; },
                                  errorTrace: (tr) => { }).Wait();
 
@@ -1402,7 +1743,7 @@ namespace System.Web.Http.Tracing
                                  "tester",
                                  "testOp",
                                  beginTrace: (tr) => { tr.Message = "beginMessage"; },
-                                 execute: () => TaskHelpers.FromResult<int>(1),
+                                 execute: () => Task.FromResult<int>(1),
                                  endTrace: (tr, value) => { tr.Message = "endMessage" + value; },
                                  errorTrace: (tr) => { tr.Message = "won't happen"; }).Wait();
 

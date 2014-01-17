@@ -19,11 +19,21 @@ namespace System.Net.Http.Formatting
         }
 
         [Fact]
+        public void IndexerIsEquivalentToGet()
+        {
+            FormDataCollection form = new FormDataCollection(new Uri("http://foo.com/?x=1&y=2"));
+
+            Assert.Equal("1", form.Get("x"));
+            Assert.Equal(form["x"], form.Get("x"));
+            Assert.Equal(form[null], form.Get(null));
+        }
+
+        [Fact]
         public void CreateFromEmptyUri()
         {
             FormDataCollection form = new FormDataCollection(new Uri("http://foo.com"));
 
-            Assert.Empty(form);            
+            Assert.Empty(form);
         }
 
         [Fact]
@@ -31,21 +41,21 @@ namespace System.Net.Http.Formatting
         {
             Assert.ThrowsArgumentNull(() => new FormDataCollection((Uri)null), "uri");
         }
-        
+
         [Fact]
         public void CreateFromEmptyString()
         {
             FormDataCollection form = new FormDataCollection("");
 
-            Assert.Empty(form);       
+            Assert.Empty(form);
         }
 
         [Fact]
         public void CreateFromNullString()
         {
-            FormDataCollection form = new FormDataCollection((string) null);
+            FormDataCollection form = new FormDataCollection((string)null);
 
-            Assert.Empty(form);       
+            Assert.Empty(form);
         }
 
         [Fact]
@@ -58,7 +68,7 @@ namespace System.Net.Http.Formatting
         [Fact]
         public void CreateFromPairs()
         {
-            Dictionary<string, string> pairs = new Dictionary<string,string> 
+            Dictionary<string, string> pairs = new Dictionary<string, string> 
             { 
                 { "x",  "1"}, 
                 { "y" , "2"} 
@@ -89,8 +99,8 @@ namespace System.Net.Http.Formatting
         public void GetValues()
         {
             FormDataCollection form = new FormDataCollection(new Uri("http://foo.com/?x=1&x=2&x=3"));
-                        
-            Assert.Equal(new string[] { "1", "2", "3"}, form.GetValues("x"));
+
+            Assert.Equal(new string[] { "1", "2", "3" }, form.GetValues("x"));
         }
 
         [Fact]
@@ -98,7 +108,7 @@ namespace System.Net.Http.Formatting
         {
             FormDataCollection form = new FormDataCollection(new Uri("http://foo.com/?x=1&Y=2"));
 
-            NameValueCollection nvc = form.ReadAsNameValueCollection();
+            var nvc = form.ReadAsNameValueCollection();
 
             Assert.Equal(2, nvc.Count);
             Assert.Equal("1", nvc.Get("x"));
@@ -110,17 +120,17 @@ namespace System.Net.Http.Formatting
         {
             FormDataCollection form = new FormDataCollection(new Uri("http://foo.com/?x=1a&y=2&x=1b&=ValueOnly&KeyOnly"));
 
-            NameValueCollection nvc = form.ReadAsNameValueCollection();
+            var nvc = form.ReadAsNameValueCollection();
 
             // y=2
             // x=1a;x=1b
             // =ValueOnly
             // KeyOnly
             Assert.Equal(4, nvc.Count);
-            Assert.Equal(new string[] { "1a", "1b"}, nvc.GetValues("x"));
+            Assert.Equal(new string[] { "1a", "1b" }, nvc.GetValues("x"));
             Assert.Equal("1a,1b", nvc.Get("x"));
             Assert.Equal("2", nvc.Get("y"));
-            Assert.Equal("", nvc.Get("KeyOnly"));            
+            Assert.Equal("", nvc.Get("KeyOnly"));
             Assert.Equal("ValueOnly", nvc.Get(""));
         }
 
@@ -139,7 +149,7 @@ namespace System.Net.Http.Formatting
         [InlineData("x=null", "null")] // null literal, not escaped
         [InlineData("x=undefined", "undefined")] // undefined literal, not escaped
         [InlineData("x=\"null\"", "\"null\"")] // quoted null, preserved as is
-        public void Whitespace(string queryString, string expected)        
+        public void Whitespace(string queryString, string expected)
         {
             FormDataCollection fd = new FormDataCollection(queryString);
 

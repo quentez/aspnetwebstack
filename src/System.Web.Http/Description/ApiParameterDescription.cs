@@ -1,6 +1,10 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Web.Http.Controllers;
+using System.Web.Http.Internal;
 
 namespace System.Web.Http.Description
 {
@@ -37,8 +41,25 @@ namespace System.Web.Http.Description
         /// Gets or sets the parameter descriptor.
         /// </summary>
         /// <value>
-        /// The parameter descriptor.
+        /// The parameter descriptor. <see langref="null"/> if (and only if) a <see cref="ApiParameterSource.FromUri"/>
+        /// parameter is declared in route template but unused in the API. Never-<see langref="null"/> for other
+        /// sources.
         /// </value>
+        /// <remarks>
+        /// For more information on the <see langref="null"/> case, search <see cref="ApiExplorer"/> for "undeclared"
+        /// route parameter handling.
+        /// </remarks>
         public HttpParameterDescriptor ParameterDescriptor { get; set; }
+
+        internal IEnumerable<PropertyInfo> GetBindableProperties()
+        {
+            return ParameterDescriptor.ParameterType.GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                       .Where(p => p.GetGetMethod() != null && p.GetSetMethod() != null);
+        }
+
+        internal bool CanConvertPropertiesFromString()
+        {
+            return GetBindableProperties().All(p => TypeHelper.CanConvertFromString(p.PropertyType));
+        }
     }
 }

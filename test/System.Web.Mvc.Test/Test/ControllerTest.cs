@@ -438,6 +438,19 @@ namespace System.Web.Mvc.Test
                 "A public action method 'UnknownAction' was not found on controller 'System.Web.Mvc.Test.ControllerTest+EmptyController'.");
         }
 
+        /// <summary>
+        /// This is a scenario for attribute routing, we don't have a single action nameat this point
+        /// </summary>
+        [Fact]
+        public void HandleUnknownAction_NoActionName_Throws()
+        {
+            var controller = new EmptyController();
+            Assert.Throws<HttpException>(
+                delegate { controller.HandleUnknownAction(null); },
+                "No matching action was found on controller 'System.Web.Mvc.Test.ControllerTest+EmptyController'. " +
+                "This can happen when a controller uses RouteAttribute for routing, but no action on that controller matches the request.");
+        }
+
         [Fact]
         public void JavaScript()
         {
@@ -1835,6 +1848,22 @@ namespace System.Web.Mvc.Test
             Assert.Same(tempMock.Object, temp);
         }
 
+        [Fact]
+        public void CanMock_UrlHelper()
+        {
+            // Arrange
+            var controller = new UrlHelperController();
+            Mock<UrlHelper> urlHelper = new Mock<UrlHelper>();
+            urlHelper.Setup(u => u.Action("SimpleAction", new { ID = 42 })).Verifiable();
+            controller.Url = urlHelper.Object;
+
+            // Act
+            controller.SimpleAction();
+
+            // Assert
+            urlHelper.Verify();
+        }
+
         private class TryValidateModelModel
         {
             [Range(10, 20, ErrorMessage = "Out of range!")]
@@ -1842,6 +1871,14 @@ namespace System.Web.Mvc.Test
         }
 
         // Helpers
+
+        private class UrlHelperController : Controller
+        {
+            public string SimpleAction()
+            {
+                return Url.Action("SimpleAction", new { ID = 42 });
+            }
+        }
 
         private class SimpleController : Controller
         {

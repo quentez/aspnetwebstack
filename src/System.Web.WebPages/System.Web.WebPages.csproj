@@ -12,7 +12,6 @@
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
     <DefineConstants>$(DefineConstants);ASPNETWEBPAGES</DefineConstants>
     <NoWarn>1591</NoWarn>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
@@ -122,15 +121,19 @@
     <Compile Include="IVirtualPathUtility.cs" />
     <Compile Include="MimeMapping.cs" />
     <Compile Include="Mvc\ModelClientValidationEqualToRule.cs" />
+    <Compile Include="Mvc\ModelClientValidationMinLengthRule.cs" />
     <Compile Include="Mvc\ModelClientValidationMembershipPasswordRule.cs" />
     <Compile Include="Mvc\ModelClientValidationRangeRule.cs" />
     <Compile Include="Mvc\ModelClientValidationRegexRule.cs" />
     <Compile Include="Mvc\ModelClientValidationRemoteRule.cs" />
     <Compile Include="Mvc\ModelClientValidationRequiredRule.cs" />
     <Compile Include="Mvc\ModelClientValidationRule.cs" />
+    <Compile Include="Mvc\ModelClientValidationMaxLengthRule.cs" />
     <Compile Include="Mvc\ModelClientValidationStringLengthRule.cs" />
     <Compile Include="Mvc\UnobtrusiveValidationAttributesGenerator.cs" />
     <Compile Include="RequestBrowserOverrideStore.cs" />
+    <Compile Include="Utils\HtmlAttributePropertyHelper.cs" />
+    <Compile Include="..\Common\PropertyHelper.cs" />
     <Compile Include="Utils\SessionStateUtil.cs" />
     <Compile Include="Utils\TypeHelper.cs" />
     <Compile Include="Utils\UrlRewriterHelper.cs" />
@@ -255,5 +258,4 @@
     <CodeAnalysisDictionary Include="..\CodeAnalysisDictionary.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
 </Project>

@@ -12,7 +12,6 @@
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
     <DefineConstants>$(DefineConstants);ASPNETMVC;ASPNETWEBAPI</DefineConstants>
     <NoWarn>1591</NoWarn>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>false</SignAssembly>
@@ -41,6 +40,9 @@
     <Compile Include="..\Common\DictionaryExtensions.cs">
       <Link>Common\DictionaryExtensions.cs</Link>
     </Compile>
+    <Compile Include="..\Common\EfficientTypePropertyKey.cs">
+      <Link>Metadata\EfficientTypePropertyKey.cs</Link>
+    </Compile>
     <Compile Include="..\Common\Error.cs">
       <Link>Common\Error.cs</Link>
     </Compile>
@@ -53,11 +55,47 @@
     <Compile Include="..\Common\PrefixContainer.cs">
       <Link>Common\PrefixContainer.cs</Link>
     </Compile>
+    <Compile Include="..\Common\PropertyHelper.cs">
+      <Link>Routing\PropertyHelper.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\DirectRouteBuilder.cs">
+      <Link>Routing\DirectRouteBuilder.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\DirectRouteFactoryContext.cs">
+      <Link>Routing\DirectRouteFactoryContext.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\IDirectRouteBuilder.cs">
+      <Link>Routing\IDirectRouteBuilder.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\IDirectRouteFactory.cs">
+      <Link>Routing\IDirectRouteFactory.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\IInlineConstraintResolver.cs">
+      <Link>Routing\IInlineConstraintResolver.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteEntry.cs">
+      <Link>Routing\RouteEntry.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteFactoryAttribute.cs">
+      <Link>Routing\RouteFactoryAttribute.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteInfoDirectRouteFactory.cs">
+      <Link>Routing\RouteInfoDirectRouteFactory.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RouteParser.cs">
+      <Link>Routing\RouteParser.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\RoutePrecedence.cs">
+      <Link>Routing\RoutePrecedence.cs</Link>
+    </Compile>
     <Compile Include="..\Common\TaskHelpers.cs">
       <Link>Common\TaskHelpers.cs</Link>
     </Compile>
     <Compile Include="..\Common\TaskHelpersExtensions.cs">
       <Link>Common\TaskHelpersExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\TraceWriterExceptionMapper.cs">
+      <Link>Tracing\TraceWriterExceptionMapper.cs</Link>
     </Compile>
     <Compile Include="..\Common\TypeExtensions.cs">
       <Link>Common\TypeExtensions.cs</Link>
@@ -75,6 +113,8 @@
     <Compile Include="Controllers\AuthenticationFilterResult.cs" />
     <Compile Include="Controllers\AuthorizationFilterResult.cs" />
     <Compile Include="Controllers\ExceptionFilterResult.cs" />
+    <Compile Include="Controllers\HttpActionDescriptorExtensions.cs" />
+    <Compile Include="Controllers\HttpControllerDescriptorExtensions.cs" />
     <Compile Include="Controllers\RequestBackedHttpRequestContext.cs" />
     <Compile Include="Controllers\HttpControllerSettings.cs" />
     <Compile Include="Controllers\HttpParameterDescriptorExtensions.cs" />
@@ -85,7 +125,28 @@
     <Compile Include="Description\ResponseTypeAttribute.cs" />
     <Compile Include="Description\ResponseDescription.cs" />
     <Compile Include="EmptyReadOnlyDictionary.cs" />
+    <Compile Include="ExceptionHandling\CompositeExceptionLogger.cs" />
+    <Compile Include="ExceptionHandling\ExceptionContextCatchBlock.cs" />
+    <Compile Include="ExceptionHandling\ExceptionHandlerExtensions.cs" />
+    <Compile Include="ExceptionHandling\ExceptionLogger.cs" />
+    <Compile Include="ExceptionHandling\DefaultExceptionHandler.cs" />
+    <Compile Include="ExceptionHandling\ExceptionContext.cs" />
+    <Compile Include="ExceptionHandling\ExceptionHandler.cs" />
+    <Compile Include="ExceptionHandling\ExceptionHandlerContext.cs" />
+    <Compile Include="ExceptionHandling\ExceptionLoggerExtensions.cs" />
+    <Compile Include="ExceptionHandling\ExceptionServices.cs" />
+    <Compile Include="ExceptionHandling\ExceptionCatchBlocks.cs" />
+    <Compile Include="ExceptionHandling\IExceptionHandler.cs" />
+    <Compile Include="ExceptionHandling\IExceptionLogger.cs" />
+    <Compile Include="ExceptionHandling\ExceptionLoggerContext.cs" />
+    <Compile Include="ExceptionHandling\EmptyExceptionHandler.cs" />
+    <Compile Include="ExceptionHandling\LastChanceExceptionHandler.cs" />
     <Compile Include="Filters\HttpAuthenticationChallengeContext.cs" />
+    <Compile Include="Properties\SRResources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>SRResources.resx</DependentUpon>
+    </Compile>
     <Compile Include="Results\BadRequestResult.cs" />
     <Compile Include="Results\RedirectToRouteResult.cs" />
     <Compile Include="Results\RedirectResult.cs" />
@@ -119,12 +180,13 @@
     <Compile Include="OverrideExceptionFiltersAttribute.cs" />
     <Compile Include="RouteAttribute.cs" />
     <Compile Include="Controllers\CandidateAction.cs" />
-    <Compile Include="Routing\HttpSubRouteCollection.cs" />
+    <Compile Include="Routing\AttributeRoutingMapper.cs" />
+    <Compile Include="Routing\RouteValueKeys.cs" />
     <Compile Include="Routing\RouteCollectionRoute.cs" />
-    <Compile Include="Routing\GenerationRoute.cs" />
+    <Compile Include="Routing\LinkGenerationRoute.cs" />
     <Compile Include="Routing\HttpRouteDataExtensions.cs" />
     <Compile Include="Routing\HttpRouteExtensions.cs" />
-    <Compile Include="Routing\RouteKeys.cs" />
+    <Compile Include="Routing\RouteDataTokenKeys.cs" />
     <Compile Include="..\Common\Routing\Constraints\AlphaRouteConstraint.cs">
       <Link>Routing\Constraints\AlphaRouteConstraint.cs</Link>
     </Compile>
@@ -185,17 +247,20 @@
     <Compile Include="..\Common\Routing\InlineRouteTemplateParser.cs">
       <Link>Routing\InlineRouteTemplateParser.cs</Link>
     </Compile>
-    <Compile Include="Routing\HttpRouteBuilder.cs" />
-    <Compile Include="..\Common\Routing\HttpRouteEntry.cs">
-      <Link>Routing\HttpRouteEntry.cs</Link>
+    <Compile Include="..\Common\Routing\SubRouteCollection.cs">
+      <Link>Routing\SubRouteCollection.cs</Link>
+    </Compile>
+    <Compile Include="..\Common\Routing\IRoutePrefix.cs">
+      <Link>Routing\IRoutePrefix.cs</Link>
     </Compile>
     <Compile Include="Routing\IHttpRouteInfoProvider.cs" />
-    <Compile Include="Routing\IInlineConstraintResolver.cs" />
+    <Compile Include="Routing\StopRoutingHandler.cs" />
     <Compile Include="Services\Decorator.cs" />
     <Compile Include="Services\IDecorator.cs" />
     <Compile Include="Tracing\TraceLevelHelper.cs" />
     <Compile Include="Tracing\TraceKindHelper.cs" />
     <Compile Include="Tracing\Tracers\AuthenticationFilterTracer.cs" />
+    <Compile Include="Tracing\Tracers\DefaultHttpControllerTypeResolverTracer.cs" />
     <Compile Include="Tracing\Tracers\OverrideFilterTracer.cs" />
     <Compile Include="Validation\IModelValidatorCache.cs" />
     <Compile Include="Validation\ModelValidatorCache.cs" />
@@ -287,9 +352,6 @@
     <Compile Include="Routing\HttpRoute.cs" />
     <Compile Include="Routing\HttpRouteData.cs" />
     <Compile Include="Routing\HttpRouteDirection.cs" />
-    <Compile Include="..\Common\Routing\HttpRouteParser.cs">
-      <Link>Routing\HttpRouteParser.cs</Link>
-    </Compile>
     <Compile Include="Routing\HttpRouteValueDictionary.cs" />
     <Compile Include="Routing\HttpVirtualPathData.cs" />
     <Compile Include="Routing\IHttpRouteConstraint.cs" />
@@ -377,11 +439,6 @@
     <Compile Include="ModelBinding\ModelState.cs" />
     <Compile Include="ModelBinding\ModelStateDictionary.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Properties\SRResources.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>SRResources.resx</DependentUpon>
-    </Compile>
     <Compile Include="Services\ServicesContainer.cs" />
     <Compile Include="Tracing\IFormatterTracer.cs" />
     <Compile Include="Tracing\ITraceManager.cs" />
@@ -469,7 +526,6 @@
     <CodeAnalysisDictionary Include="..\CodeAnalysisDictionary.xml" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Modelbinding_ClassDiagram.cd" />
     <None Include="packages.config">
       <SubType>Designer</SubType>
     </None>
@@ -492,8 +548,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Properties\SRResources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>SRResources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
+      <LastGenOutput>SRResources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
@@ -504,5 +560,4 @@
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
 </Project>

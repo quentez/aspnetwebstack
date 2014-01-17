@@ -11,11 +11,10 @@
     <RunCodeAnalysis>$(CodeAnalysis)</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\Strict.ruleset</CodeAnalysisRuleSet>
     <DefineConstants>$(DefineConstants);ASPNETMVC</DefineConstants>
-    <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\..\</SolutionDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Owin">
-      <HintPath>..\..\packages\Microsoft.Owin.2.0.0-rtw2-20925-642-rel\lib\net45\Microsoft.Owin.dll</HintPath>
+      <HintPath>..\..\packages\Microsoft.Owin.2.0.2\lib\net45\Microsoft.Owin.dll</HintPath>
     </Reference>
     <Reference Include="Owin">
       <HintPath>..\..\packages\Owin.1.0\lib\net40\Owin.dll</HintPath>
@@ -40,13 +39,20 @@
     <Compile Include="..\Common\ListWrapperCollection.cs">
       <Link>Common\ListWrapperCollection.cs</Link>
     </Compile>
+    <Compile Include="..\Common\NonOwnedStream.cs">
+      <Link>Common\NonOwnedStream.cs</Link>
+    </Compile>
     <Compile Include="..\Common\TaskHelpers.cs">
       <Link>Common\TaskHelpers.cs</Link>
     </Compile>
     <Compile Include="..\Common\TaskHelpersExtensions.cs">
       <Link>Common\TaskHelpersExtensions.cs</Link>
     </Compile>
+    <Compile Include="ExceptionHandling\DefaultExceptionHandler.cs" />
+    <Compile Include="ExceptionHandling\EmptyExceptionLogger.cs" />
+    <Compile Include="OwinExceptionCatchBlocks.cs" />
     <Compile Include="HostAuthenticationAttribute.cs" />
+    <Compile Include="HttpMessageHandlerOptions.cs" />
     <Compile Include="OwinHttpConfigurationExtensions.cs" />
     <Compile Include="HostAuthenticationFilter.cs" />
     <Compile Include="OwinBufferPolicySelector.cs" />
@@ -55,6 +61,8 @@
     <Compile Include="HttpMessageHandlerAdapter.cs" />
     <Compile Include="OwinHttpRequestContext.cs" />
     <Compile Include="OwinHttpRequestMessageExtensions.cs" />
+    <Compile Include="OwinRequestExtensions.cs" />
+    <Compile Include="OwinResponseExtensions.cs" />
     <Compile Include="PassiveAuthenticationMessageHandler.cs" />
     <Compile Include="WebApiAppBuilderExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -102,5 +110,4 @@
     </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
 </Project>

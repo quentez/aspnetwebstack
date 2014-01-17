@@ -63,47 +63,51 @@ namespace System.Web.Http.OData.Query.Expressions
         private IAssembliesResolver _assembliesResolver;
 
         private FilterBinder(IEdmModel model, IAssembliesResolver assembliesResolver, ODataQuerySettings querySettings)
+            : this(model, querySettings)
+        {
+            _assembliesResolver = assembliesResolver;
+        }
+
+        private FilterBinder(IEdmModel model, ODataQuerySettings querySettings)
         {
             Contract.Assert(model != null);
-            Contract.Assert(assembliesResolver != null);
             Contract.Assert(querySettings != null);
             Contract.Assert(querySettings.HandleNullPropagation != HandleNullPropagationOption.Default);
 
             _querySettings = querySettings;
             _parametersStack = new Stack<Dictionary<string, ParameterExpression>>();
             _model = model;
-            _assembliesResolver = assembliesResolver;
         }
 
-        public static Expression<Func<TEntityType, bool>> Bind<TEntityType>(FilterClause filterClause, IEdmModel model, IAssembliesResolver assembliesResolver, ODataQuerySettings querySettings)
+        public static Expression<Func<TEntityType, bool>> Bind<TEntityType>(FilterClause filterClause, IEdmModel model,
+            IAssembliesResolver assembliesResolver, ODataQuerySettings querySettings)
         {
             return Bind(filterClause, typeof(TEntityType), model, assembliesResolver, querySettings) as Expression<Func<TEntityType, bool>>;
         }
 
-        public static Expression Bind(FilterClause filterClause, Type filterType, IEdmModel model, IAssembliesResolver assembliesResolver, ODataQuerySettings querySettings)
+        public static Expression Bind(FilterClause filterClause, Type filterType, IEdmModel model,
+            IAssembliesResolver assembliesResolver, ODataQuerySettings querySettings)
         {
             if (filterClause == null)
             {
-                throw Error.ArgumentNull("filterNode");
+                throw Error.ArgumentNull("filterClause");
             }
-
             if (filterType == null)
             {
                 throw Error.ArgumentNull("filterType");
             }
-
             if (model == null)
             {
                 throw Error.ArgumentNull("model");
             }
-
             if (assembliesResolver == null)
             {
                 throw Error.ArgumentNull("assembliesResolver");
             }
 
             FilterBinder binder = new FilterBinder(model, assembliesResolver, querySettings);
-            Expression filter = binder.BindFilterClause(filterClause, filterType);
+            LambdaExpression filter = binder.BindExpression(filterClause.Expression, filterClause.RangeVariable, filterType);
+            filter = Expression.Lambda(binder.ApplyNullPropagationForFilterBody(filter.Body), filter.Parameters);
 
             Type expectedFilterType = typeof(Func<,>).MakeGenericType(filterType, typeof(bool));
             if (filter.Type != expectedFilterType)
@@ -112,6 +116,19 @@ namespace System.Web.Http.OData.Query.Expressions
             }
 
             return filter;
+        }
+
+        public static LambdaExpression Bind(OrderByClause orderBy, Type elementType,
+            IEdmModel model, ODataQuerySettings querySettings)
+        {
+            Contract.Assert(orderBy != null);
+            Contract.Assert(elementType != null);
+            Contract.Assert(model != null);
+            Contract.Assert(querySettings != null);
+
+            FilterBinder binder = new FilterBinder(model, querySettings);
+            LambdaExpression orderByLambda = binder.BindExpression(orderBy.Expression, orderBy.RangeVariable, elementType);
+            return orderByLambda;
         }
 
         private Expression Bind(QueryNode node)
@@ -375,27 +392,14 @@ namespace System.Web.Http.OData.Query.Expressions
             }
         }
 
-        private Expression BindFilterClause(FilterClause filterClause, Type filterType)
+        private LambdaExpression BindExpression(SingleValueNode expression, RangeVariable rangeVariable, Type elementType)
         {
-            ParameterExpression filterParameter = Expression.Parameter(filterType, filterClause.RangeVariable.Name);
+            ParameterExpression filterParameter = Expression.Parameter(elementType, rangeVariable.Name);
             _lambdaParameters = new Dictionary<string, ParameterExpression>();
-            _lambdaParameters.Add(filterClause.RangeVariable.Name, filterParameter);
+            _lambdaParameters.Add(rangeVariable.Name, filterParameter);
 
-            Expression body = Bind(filterClause.Expression);
-
-            body = ApplyNullPropagationForFilterBody(body);
-
-            Expression filterExpression = Expression.Lambda(body, filterParameter);
-            if (_parametersStack.Count != 0)
-            {
-                _lambdaParameters = _parametersStack.Pop();
-            }
-            else
-            {
-                _lambdaParameters = null;
-            }
-
-            return filterExpression;
+            Expression body = Bind(expression);
+            return Expression.Lambda(body, filterParameter);
         }
 
         private Expression ApplyNullPropagationForFilterBody(Expression body)
@@ -897,6 +901,8 @@ namespace System.Web.Http.OData.Query.Expressions
 
             Expression all = All(source, body);
 
+            ExitLamdbaScope();
+
             if (_querySettings.HandleNullPropagation == HandleNullPropagationOption.True && IsNullable(source.Type))
             {
                 // IFF(source == null) null; else Any(body);
@@ -931,6 +937,8 @@ namespace System.Web.Http.OData.Query.Expressions
 
             Expression any = Any(source, body);
 
+            ExitLamdbaScope();
+
             if (_querySettings.HandleNullPropagation == HandleNullPropagationOption.True && IsNullable(source.Type))
             {
                 // IFF(source == null) null; else Any(body);
@@ -950,8 +958,7 @@ namespace System.Web.Http.OData.Query.Expressions
         {
             ParameterExpression lambdaIt = null;
 
-            Contract.Assert(_lambdaParameters != null);
-            _parametersStack.Push(_lambdaParameters);
+            EnterLambdaScope();
 
             Dictionary<string, ParameterExpression> newParameters = new Dictionary<string, ParameterExpression>();
             foreach (RangeVariable rangeVariable in rangeVariables)
@@ -1056,6 +1063,24 @@ namespace System.Web.Http.OData.Query.Expressions
             }
 
             return source;
+        }
+
+        private void EnterLambdaScope()
+        {
+            Contract.Assert(_lambdaParameters != null);
+            _parametersStack.Push(_lambdaParameters);
+        }
+
+        private void ExitLamdbaScope()
+        {
+            if (_parametersStack.Count != 0)
+            {
+                _lambdaParameters = _parametersStack.Pop();
+            }
+            else
+            {
+                _lambdaParameters = null;
+            }
         }
 
         private static Expression CreateBinaryExpression(BinaryOperatorKind binaryOperator, Expression left, Expression right, bool liftToNull)

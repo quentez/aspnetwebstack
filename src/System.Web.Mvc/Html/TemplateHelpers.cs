@@ -10,6 +10,7 @@ using System.Linq.Expressions;
 using System.Web.Mvc.Properties;
 using System.Web.Routing;
 using System.Web.UI.WebControls;
+using System.Web.WebPages;
 
 namespace System.Web.Mvc.Html
 {
@@ -164,8 +165,24 @@ namespace System.Web.Mvc.Html
             // TODO: Make better string names for generic types
             yield return fieldType.Name;
 
-            if (!metadata.IsComplexType)
+            if (fieldType == typeof(string))
             {
+                // Nothing more to provide
+                yield break;
+            }
+            else if (!metadata.IsComplexType)
+            {
+                // IsEnum is false for the Enum class itself
+                if (fieldType.IsEnum)
+                {
+                    // Same as fieldType.BaseType.Name in this case
+                    yield return "Enum";
+                }
+                else if (fieldType == typeof(DateTimeOffset))
+                {
+                    yield return "DateTime";
+                }
+
                 yield return "String";
             }
             else if (fieldType.IsInterface)
@@ -287,7 +304,7 @@ namespace System.Web.Mvc.Html
 
             if (additionalViewData != null)
             {
-                foreach (KeyValuePair<string, object> kvp in new RouteValueDictionary(additionalViewData))
+                foreach (KeyValuePair<string, object> kvp in TypeHelper.ObjectToDictionary(additionalViewData))
                 {
                     viewData[kvp.Key] = kvp.Value;
                 }

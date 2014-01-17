@@ -5,6 +5,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.Reflection;
 using System.Web.Mvc;
+using System.Web.Mvc.Routing;
 using Microsoft.TestCommon;
 using Moq;
 
@@ -55,7 +56,7 @@ namespace System.Web.Routing
             // Arrange
             var controllerTypes = new[] { derivedController, derivedController.BaseType };
             var routes = new RouteCollection();
-            routes.MapMvcAttributeRoutes(controllerTypes);
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
 
             HttpContextBase context = GetContext(path);
             RouteData routeData = routes.GetRouteData(context);
@@ -81,7 +82,7 @@ namespace System.Web.Routing
             // Arrange
             var controllerTypes = new[] { derivedController, derivedController.BaseType };
             var routes = new RouteCollection();
-            routes.MapMvcAttributeRoutes(controllerTypes);
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
             HttpContextBase context = GetContext(path);
 
             // Act
@@ -99,7 +100,7 @@ namespace System.Web.Routing
             // Arrange
             var controllerTypes = new[] { controllerType };
             var routes = new RouteCollection();
-            routes.MapMvcAttributeRoutes(controllerTypes);
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
 
             HttpContextBase context = GetContext(path);
             RouteData routeData = routes.GetRouteData(context);
@@ -122,7 +123,7 @@ namespace System.Web.Routing
             // Arrange
             var controllerTypes = new[] { controllerType };
             var routes = new RouteCollection();
-            routes.MapMvcAttributeRoutes(controllerTypes);
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
 
             HttpContextBase context = GetContext(path);
             RouteData routeData = routes.GetRouteData(context);
@@ -130,11 +131,7 @@ namespace System.Web.Routing
             MvcHandler handler = new MvcHandler(requestContext);
             handler.ControllerBuilder.SetControllerFactory(GetControllerFactory(controllerTypes));
 
-            // Act
-            // Bug 1285: Attribute routing with ambiguous actions should throw an AmbiguousMatchException.
-            // This test should fail once that is fixed. Uncomment the line below then.
-            // Assert.Throws<AmbiguousMatchException>(() => handler.ProcessRequest(context));
-            Assert.DoesNotThrow(() => handler.ProcessRequest(context));
+            Assert.Throws<AmbiguousMatchException>(() => handler.ProcessRequest(context));
         }
 
         [Theory]
@@ -155,7 +152,7 @@ namespace System.Web.Routing
             var routes = new RouteCollection();
             object defaults = new { controller = controllerType.Name.Substring(0, controllerType.Name.Length - 10) };
             routes.Add(new Route("standard/{action}", new RouteValueDictionary(defaults), null));
-            routes.MapMvcAttributeRoutes(controllerTypes);
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
 
             HttpContextBase context = GetContext(path);
             RouteData routeData = routes.GetRouteData(context);
@@ -177,6 +174,188 @@ namespace System.Web.Routing
                 ContentResult result = Assert.IsType<ContentResult>(context.Items[ResultKey]);
                 Assert.Equal(expectedAction, result.Content);
             }
+        }
+
+        [Theory]
+        [InlineData(typeof(ActionMethodSelectorsController), "~/Action1", "Action1(int)")]
+        [InlineData(typeof(ActionMethodSelectorsController), "~/DoesntRun", null)]
+        public void AttributeRouting_WithActionMethodSelectors(Type controllerType, string path, string expectedAction)
+        {
+            // Arrange
+            var controllerTypes = new[] { controllerType };
+            var routes = new RouteCollection();
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
+
+            HttpContextBase context = GetContext(path);
+            RouteData routeData = routes.GetRouteData(context);
+            RequestContext requestContext = new RequestContext(context, routeData);
+            MvcHandler handler = new MvcHandler(requestContext);
+            handler.ControllerBuilder.SetControllerFactory(GetControllerFactory(controllerTypes));
+
+            if (expectedAction == null)
+            {
+                // Act & Assert
+                Assert.Throws<HttpException>(() => handler.ProcessRequest(context));
+            }
+            else
+            {
+                // Act
+                handler.ProcessRequest(context);
+
+                // Assert
+                ContentResult result = Assert.IsType<ContentResult>(context.Items[ResultKey]);
+                Assert.Equal(expectedAction, result.Content);
+            }
+        }
+
+        [Theory]
+        [InlineData(typeof(ActionNameSelectorsController), "~/SpecialName", "Action2()")]
+        [InlineData(typeof(ActionNameSelectorsController), "~/AnotherSpecialName", "Action3()")]
+        public void AttributeRouting_WithActionNameSelectors(Type controllerType, string path, string expectedAction)
+        {
+            // Arrange
+            var controllerTypes = new[] { controllerType };
+            var routes = new RouteCollection();
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
+
+            HttpContextBase context = GetContext(path);
+            RouteData routeData = routes.GetRouteData(context);
+            RequestContext requestContext = new RequestContext(context, routeData);
+            MvcHandler handler = new MvcHandler(requestContext);
+            handler.ControllerBuilder.SetControllerFactory(GetControllerFactory(controllerTypes));
+
+            if (expectedAction == null)
+            {
+                // Act & Assert
+                Assert.Throws<HttpException>(() => handler.ProcessRequest(context));
+            }
+            else
+            {
+                // Act
+                handler.ProcessRequest(context);
+
+                // Assert
+                ContentResult result = Assert.IsType<ContentResult>(context.Items[ResultKey]);
+                Assert.Equal(expectedAction, result.Content);
+            }
+        }
+
+        [Fact]
+        public void AttributeRouting_OptionalParametersGetRemoved()
+        {
+            // Arrange
+            var controllerTypes = new[] { typeof(OptionalParameterController) };
+            var routes = new RouteCollection();
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
+
+            HttpContextBase context = GetContext("~/Create");
+            RouteData routeData = routes.GetRouteData(context);
+            RequestContext requestContext = new RequestContext(context, routeData);
+            MvcHandler handler = new MvcHandler(requestContext);
+            handler.ControllerBuilder.SetControllerFactory(GetControllerFactory(controllerTypes));
+
+            // Act
+            handler.ProcessRequest(context);
+
+            // Assert
+            ContentResult result = Assert.IsType<ContentResult>(context.Items[ResultKey]);
+            Assert.Equal("Create()", result.Content);
+
+            // The request context should be updated to to contain the routedata of the direct route
+            Assert.Equal("{action}/{id}", ((Route)requestContext.RouteData.Route).Url);
+            Assert.Null(requestContext.RouteData.Values["id"]);
+        }
+
+        [Theory]
+        [InlineData("~/Home1/Index", "Home1.Index()")]
+        [InlineData("~/Home2/Index", "Home2.Index()")]
+        public void AttributeRouting_WithSameControllerName(string path, string expectedAction)
+        {
+            // Arrange
+            var controllerTypes = new[] 
+            { 
+                typeof(ControllersWithTheSameName.NS1.HomeController), 
+                typeof(ControllersWithTheSameName.NS2.HomeController), 
+            };
+
+            var routes = new RouteCollection();
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
+
+            HttpContextBase context = GetContext(path);
+            RouteData routeData = routes.GetRouteData(context);
+            RequestContext requestContext = new RequestContext(context, routeData);
+            MvcHandler handler = new MvcHandler(requestContext);
+            handler.ControllerBuilder.SetControllerFactory(GetControllerFactory(controllerTypes));
+
+            // Act
+            handler.ProcessRequest(context);
+
+            // Assert
+            ContentResult result = Assert.IsType<ContentResult>(context.Items[ResultKey]);
+            Assert.Equal(expectedAction, result.Content);
+        }
+
+        [Theory]
+        [InlineData("~/NS1Home/Introduction", "Home.Index()")]
+        [InlineData("~/NS2Account/PeopleList", "Account.Index()")]
+        [InlineData("~/Default/Unknown", "Default.Index()")]
+        public void AttributeRouting_WithCustomizedRoutePrefixAttribute(string path, string expectedAction)
+        {
+            // Arrange
+            var controllerTypes = new[] 
+            { 
+                typeof(ControllersWithCustomizedRoutePrefixAttribute.NS1.HomeController), 
+                typeof(ControllersWithCustomizedRoutePrefixAttribute.NS2.AccountController), 
+                typeof(ControllersWithCustomizedRoutePrefixAttribute.NS3.OtherController), 
+            };
+
+            var routes = new RouteCollection();
+            AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes);
+
+            HttpContextBase context = GetContext(path);
+            RouteData routeData = routes.GetRouteData(context);
+            RequestContext requestContext = new RequestContext(context, routeData);
+            MvcHandler handler = new MvcHandler(requestContext);
+            handler.ControllerBuilder.SetControllerFactory(GetControllerFactory(controllerTypes));
+
+            // Act
+            handler.ProcessRequest(context);
+
+            // Assert
+            ContentResult result = Assert.IsType<ContentResult>(context.Items[ResultKey]);
+            Assert.Equal(expectedAction, result.Content);
+        }
+
+        [Fact]
+        public void AttributeRouting_WithMultipleCustomizedRoutePrefixAttribute_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var controllerTypes = new[] 
+            { 
+                typeof(ControllersWithCustomizedRoutePrefixAttribute.Invalid.HomeController)
+            };
+
+            var routes = new RouteCollection();
+
+            // Act & Assert
+            Assert.Throws<InvalidOperationException>(() => AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes),
+                "Only one route prefix attribute is supported. Remove extra attributes from the controller of type 'System.Web.Routing.ControllersWithCustomizedRoutePrefixAttribute.Invalid.HomeController'.");
+        }
+
+        [Fact]
+        public void AttributeRouting_WithNullPrefix_ThrowsInvalidOperationException()
+        {
+            // Arrange
+            var controllerTypes = new[] 
+            { 
+                typeof(ControllersWithCustomizedRoutePrefixAttribute.Invalid.AccountController)
+            };
+
+            var routes = new RouteCollection();
+
+            // Act & Assert
+            Assert.Throws<InvalidOperationException>(() => AttributeRoutingMapper.MapAttributeRoutes(routes, controllerTypes),
+                "The property 'prefix' from route prefix attribute on controller of type 'System.Web.Routing.ControllersWithCustomizedRoutePrefixAttribute.Invalid.AccountController' cannot be null.");
         }
 
         private IControllerFactory GetControllerFactory(Type[] controllerTypes)
@@ -201,6 +380,7 @@ namespace System.Web.Routing
             // mock HttpRequest
             Mock<HttpRequestBase> requestMock = new Mock<HttpRequestBase>();
             requestMock.Setup(request => request.Url).Returns(uri);
+            requestMock.Setup(request => request.HttpMethod).Returns("GET");
             requestMock.Setup(request => request.Form).Returns(new NameValueCollection());
             requestMock.Setup(request => request.ServerVariables).Returns(new NameValueCollection());
             requestMock.Setup(request => request.AppRelativeCurrentExecutionFilePath).Returns("~" + uri.AbsolutePath);
@@ -578,6 +758,230 @@ namespace System.Web.Routing
         public string GetWithRoute()
         {
             return "GetWithRoute";
+        }
+    }
+
+    [Route("{action}")]
+    public class ActionMethodSelectorsController : ResponseStoringController
+    {
+        public string Action1()
+        {
+            return "Action1()";
+        }
+
+        // This is a 'better' action than Action1() because it has a selector
+        [BoolActionMethodSelector(true)]
+        public string Action1(int id = 0)
+        {
+            return "Action1(int)";
+        }
+
+        // All ActionMethodSelectors need to return true
+        [BoolActionMethodSelector(true)]
+        [BoolActionMethodSelector(false)]
+        public string DoesntRun()
+        {
+            return "DoesntRun";
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true)]
+    public class BoolActionMethodSelectorAttribute : ActionMethodSelectorAttribute
+    {
+        public BoolActionMethodSelectorAttribute(bool value)
+        {
+            Value = value;
+        }
+
+        private bool Value
+        {
+            get;
+            set;
+        }
+
+        public override bool IsValidForRequest(ControllerContext controllerContext, MethodInfo methodInfo)
+        {
+            return Value;
+        }
+    }
+
+    [Route("{action}")]
+    public class ActionNameSelectorsController : ResponseStoringController
+    {
+        [StringActionNameSelector("SpecialName")]
+        public string Action1()
+        {
+            return "Action1()";
+        }
+
+        // This is 'better' because it has an action selector also
+        [HttpGet]
+        [StringActionNameSelector("SpecialName")]
+        public string Action2()
+        {
+            return "Action2()";
+        }
+
+        [StringActionNameSelector("AnotherSpecialName")]
+        public string Action3()
+        {
+            return "Action3()";
+        }
+    }
+
+    /// <summary>
+    /// A 'custom' implementation similar to ActionNameAttribute - using a custom attribute for tests
+    /// because ActionNameAttribute is special cased by the ActionDescriptor class.
+    /// </summary>
+    public class StringActionNameSelectorAttribute : ActionNameSelectorAttribute
+    {
+        public StringActionNameSelectorAttribute(string actionName)
+        {
+            ActionName = actionName;
+        }
+
+        private string ActionName
+        {
+            get;
+            set;
+        }
+
+        public override bool IsValidName(ControllerContext controllerContext, string actionName, MethodInfo methodInfo)
+        {
+            return String.Equals(actionName, ActionName, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Route("{action}/{id?}")]
+    public class OptionalParameterController : ResponseStoringController
+    {
+        public string Create()
+        {
+            return "Create()";
+        }
+    }
+
+    namespace ControllersWithTheSameName
+    {
+        namespace NS1
+        {
+            [Route("Home1/{action}")]
+            public class HomeController : ResponseStoringController
+            {
+                public ActionResult Index()
+                {
+                    return Content("Home1.Index()");
+                }
+            }
+        }
+
+        namespace NS2
+        {
+            [Route("Home2/{action}")]
+            public class HomeController : ResponseStoringController
+            {
+                public ActionResult Index()
+                {
+                    return Content("Home2.Index()");
+                }
+            }
+        }
+    }
+
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+    public class CustomizedRoutePrefixAttribute : Attribute, IRoutePrefix
+    {
+        public CustomizedRoutePrefixAttribute(Type controller)
+        {
+            if (controller == null)
+            {
+                throw Error.ArgumentNull("prefix");
+            }
+
+            if (controller.Equals(typeof(ControllersWithCustomizedRoutePrefixAttribute.NS1.HomeController)))
+            {
+                Prefix = "NS1Home";
+            }
+            else if (controller.Equals(typeof(ControllersWithCustomizedRoutePrefixAttribute.NS2.AccountController)))
+            {
+                Prefix = "NS2Account";
+            }
+            else
+            {
+                Prefix = "Default";
+            }
+        }
+
+        public string Prefix { get; private set; }
+    }
+
+    public class ExtendedRoutePrefixAttribute : RoutePrefixAttribute
+    {
+    }
+
+    namespace ControllersWithCustomizedRoutePrefixAttribute
+    {
+        namespace NS1
+        {
+            [CustomizedRoutePrefix(typeof(HomeController))]
+            public class HomeController : ResponseStoringController
+            {
+                [Route("Introduction")]
+                public ActionResult Index()
+                {
+                    return Content("Home.Index()");
+                }
+            }
+        }
+
+        namespace NS2
+        {
+            [CustomizedRoutePrefix(typeof(AccountController))]
+            public class AccountController : ResponseStoringController
+            {
+                [Route("PeopleList")]
+                public ActionResult Index()
+                {
+                    return Content("Account.Index()");
+                }
+            }
+        }
+
+        namespace NS3
+        {
+            [CustomizedRoutePrefix(typeof(OtherController))]
+            public class OtherController : ResponseStoringController
+            {
+                [Route("Unknown")]
+                public ActionResult Index()
+                {
+                    return Content("Default.Index()");
+                }
+            }
+        }
+
+        namespace Invalid
+        {
+            [CustomizedRoutePrefix(typeof(HomeController))]
+            [RoutePrefix("InvalidExtraPrefix")]
+            public class HomeController : ResponseStoringController
+            {
+                [Route("Introduction")]
+                public ActionResult Index()
+                {
+                    return Content("Home.Index()");
+                }
+            }
+
+            [ExtendedRoutePrefixAttribute]
+            public class AccountController : ResponseStoringController
+            {
+                [Route("AnyRoute")]
+                public ActionResult Index()
+                {
+                    return Content("Account.Index()");
+                }
+            }
         }
     }
 }

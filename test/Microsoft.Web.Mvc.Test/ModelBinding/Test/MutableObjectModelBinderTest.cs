@@ -135,6 +135,23 @@ namespace Microsoft.Web.Mvc.ModelBinding.Test
         }
 
         [Fact]
+        public void CreateModelThrowsIfModelTypeHasNoParameterlessConstructor()
+        {
+            // Arrange
+            TestableMutableObjectModelBinder testableBinder = new TestableMutableObjectModelBinder();
+            ExtensibleModelBindingContext bindingContext = new ExtensibleModelBindingContext
+            {
+                ModelMetadata = GetMetadataForType(typeof(NoParameterlessCtor)),
+            };
+
+            // Act & Assert, confirming type name and full stack are available in Exception
+            MissingMethodException exception = Assert.Throws<MissingMethodException>(
+                () => testableBinder.CreateModelPublic(null, bindingContext),
+                "No parameterless constructor defined for this object. Object type 'Microsoft.Web.Mvc.ModelBinding.Test.MutableObjectModelBinderTest+NoParameterlessCtor'.");
+            Assert.Contains("System.Activator.CreateInstance(", exception.ToString());
+        }
+
+        [Fact]
         public void EnsureModel_ModelIsNotNull_DoesNothing()
         {
             // Arrange
@@ -463,6 +480,7 @@ namespace Microsoft.Web.Mvc.ModelBinding.Test
         }
 
         [Fact]
+        [ReplaceCulture]
         public void SetProperty_PropertyIsSettable_SetterThrows_RecordsError()
         {
             // Arrange
@@ -547,6 +565,7 @@ namespace Microsoft.Web.Mvc.ModelBinding.Test
         }
 
         [Fact]
+        [ReplaceCulture]
         public void SetProperty_SettingNullableTypeToNull_RequiredValidatorNotPresent_PropertySetterThrows_AddsRequiredMessageString()
         {
             // Arrange
@@ -652,6 +671,13 @@ namespace Microsoft.Web.Mvc.ModelBinding.Test
 
             [DefaultValue(typeof(decimal), "123.456")]
             public decimal PropertyWithDefaultValue { get; set; }
+        }
+
+        private class NoParameterlessCtor
+        {
+            public NoParameterlessCtor(int parameter)
+            {
+            }
         }
 
         private class PersonWithBindExclusion

@@ -3,7 +3,12 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http;
+using System.Runtime.ExceptionServices;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Web.Http.ExceptionHandling;
 using System.Web.Http.Routing;
+using System.Web.Http.WebHost.Properties;
 using System.Web.Routing;
 
 namespace System.Web.Http.WebHost.Routing
@@ -41,6 +46,11 @@ namespace System.Web.Http.WebHost.Routing
 
         protected override bool ProcessConstraint(HttpContextBase httpContext, object constraint, string parameterName, RouteValueDictionary values, RouteDirection routeDirection)
         {
+            // The base class will validate that a constraint is either a string or IRoutingConstraint inside its
+            // ProcessConstraint method. We're doing the validation up front here because we also support 
+            // IHttpRouteConstraint and we want the error message to reflect all three valid possibilities.
+            ValidateConstraint(HttpRoute.RouteTemplate, parameterName, constraint);
+
             IHttpRouteConstraint httpRouteConstraint = constraint as IHttpRouteConstraint;
             if (httpRouteConstraint != null)
             {
@@ -51,8 +61,8 @@ namespace System.Web.Http.WebHost.Routing
             return base.ProcessConstraint(httpContext, constraint, parameterName, values, routeDirection);
         }
 
-        [SuppressMessage("Microsoft.Web.FxCop", "MW1201:DoNotCallProblematicMethodsOnTask",
-            Justification = "Usage is fine here as it handles error case and that task finishes synchronously in the default code path anyways.")]
+        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes",
+            Justification = "Top-level catch block for unhandled routing exceptions.")]
         public override RouteData GetRouteData(HttpContextBase httpContext)
         {
             try
@@ -69,13 +79,13 @@ namespace System.Web.Http.WebHost.Routing
                     return data == null ? null : data.ToRouteData();
                 }
             }
-            catch (HttpResponseException e)
+            catch (Exception exception)
             {
-                // Task.Wait is fine here as ConvertResponse calls into MediaTypeFormatter.WriteToStreamAsync which happens
-                // synchronously in the default case (our default formatters are synchronous).
-                HttpControllerHandler.ConvertResponse(httpContext, e.Response, httpContext.GetOrCreateHttpRequestMessage()).Wait();
-                httpContext.Response.End();
-                return null;
+                // Processing an exception involves async work, and this method is synchronous.
+                // Instead of waiting on the async work here, it's better to return a handler that will deal with the
+                // exception asynchronously during its request processing method.
+                ExceptionDispatchInfo exceptionInfo = ExceptionDispatchInfo.Capture(exception);
+                return new RouteData(this, new HttpRouteExceptionRouteHandler(exceptionInfo));
             }
         }
 
@@ -132,6 +142,41 @@ namespace System.Web.Http.WebHost.Routing
             }
 
             throw Error.InvalidEnumArgument("routeDirection", (int)routeDirection, typeof(RouteDirection));
+        }
+
+        // Validates that this constraint is of a type that HttpWebRoute can process. This is not valid to
+        // call when a route inherits from HttpWebRoute - as the derived class can handle any types of 
+        // constraints it wants to support.
+        internal static void ValidateConstraint(string routeTemplate, string name, object constraint)
+        {
+            if (constraint is IHttpRouteConstraint)
+            {
+                return;
+            }
+
+            // This validation is repeated in the call to base.ProcessConstraint, but if we do it here we can give a
+            // better error message. base.ProcessConstraint doesn't handle IHttpRouteConstraint, but this class does.
+            if (constraint is IRouteConstraint)
+            {
+                return;
+            }
+
+            if (constraint is string)
+            {
+                return;
+            }
+
+            throw CreateInvalidConstraintTypeException(routeTemplate, name);
+        }
+
+        private static Exception CreateInvalidConstraintTypeException(string routeTemplate, string name)
+        {
+            return Error.InvalidOperation(
+                SRResources.Route_ValidationMustBeStringOrCustomConstraint,
+                name,
+                routeTemplate,
+                typeof(IHttpRouteConstraint).FullName,
+                typeof(IRouteConstraint).FullName);
         }
     }
 }

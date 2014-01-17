@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Configuration.Provider;
 using System.Globalization;
 using System.Linq;
@@ -13,6 +14,7 @@ namespace WebMatrix.WebData
     public class SimpleRoleProvider : RoleProvider
     {
         private RoleProvider _previousProvider;
+        private SimpleMembershipProviderCasingBehavior _casingBehavior;
 
         public SimpleRoleProvider()
             : this(null)
@@ -73,6 +75,30 @@ namespace WebMatrix.WebData
         // Represents the User created id column, i.e. ID;
         // REVIEW: we could get this from the primary key of UserTable in the future
         public string UserIdColumn { get; set; }
+
+        /// <summary>
+        /// Gets or sets the <see cref="WebMatrix.WebData.SimpleMembershipProviderCasingBehavior"/> for this provider.
+        /// </summary>
+        /// <remarks>
+        /// This value configures whether or not queries for user names normalize the user name to uppercase. See
+        /// <see cref="WebMatrix.WebData.SimpleMembershipProviderCasingBehavior"/> for a full description.
+        /// </remarks>
+        public SimpleMembershipProviderCasingBehavior CasingBehavior
+        {
+            get
+            {
+                return _casingBehavior;
+            }
+            set
+            {
+                if (value < SimpleMembershipProviderCasingBehavior.NormalizeCasing || value > SimpleMembershipProviderCasingBehavior.RelyOnDatabaseCollation)
+                {
+                    throw new InvalidEnumArgumentException("value", (int)value, typeof(SimpleMembershipProviderCasingBehavior));
+                }
+
+                _casingBehavior = value;
+            }
+        }
 
         internal DatabaseConnectionInfo ConnectionInfo { get; set; }
         internal bool InitializeCalled { get; set; }
@@ -142,7 +168,7 @@ namespace WebMatrix.WebData
             List<int> userIds = new List<int>(usernames.Length);
             foreach (string username in usernames)
             {
-                int id = SimpleMembershipProvider.GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, username);
+                int id = SimpleMembershipProvider.GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, CasingBehavior, username);
                 if (id == -1)
                 {
                     throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, WebDataResources.Security_NoUserFound, username));
@@ -307,7 +333,7 @@ namespace WebMatrix.WebData
             }
             using (var db = ConnectToDatabase())
             {
-                int userId = SimpleMembershipProvider.GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, username);
+                int userId = SimpleMembershipProvider.GetUserId(db, SafeUserTableName, SafeUserNameColumn, SafeUserIdColumn, CasingBehavior, username);
                 if (userId == -1)
                 {
                     throw new InvalidOperationException(String.Format(CultureInfo.CurrentCulture, WebDataResources.Security_NoUserFound, username));

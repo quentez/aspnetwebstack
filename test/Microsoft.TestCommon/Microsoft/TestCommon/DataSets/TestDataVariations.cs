@@ -65,6 +65,24 @@ namespace Microsoft.TestCommon
         AsXmlElementProperty = 0x200,
 
         /// <summary>
+        /// An instance of a <see cref="System.Collections.Generic.IDictionary{string,TValue}"/> of a given
+        /// <see cref="TestData"/> type.
+        /// </summary>
+        AsDictionary = 0x400,
+
+        /// <summary>
+        /// Add a <c>null</c> instance of the given <see cref="TestData"/> type to the data set.  This variation is
+        /// not included in <see cref="All"/> or other variation masks.
+        /// </summary>
+        WithNull = 0x800,
+
+        /// <summary>
+        /// Individual instances of <see cref="TestDataHolder{T}"/> containing the given <see cref="TestData"/>.  This
+        /// variation is not included in <see cref="All"/> or other variation masks.
+        /// </summary>
+        AsClassMember = 0x1000,
+
+        /// <summary>
         /// All of the flags for single instance variations of a given <see cref="TestData"/> type.
         /// </summary>
         AllSingleInstances = AsInstance | AsDerivedType | AsKnownType | AsNullable,
@@ -72,7 +90,7 @@ namespace Microsoft.TestCommon
         /// <summary>
         /// All of the flags for collection variations of a given <see cref="TestData"/> type.
         /// </summary>
-        AllCollections = AsList | AsArray | AsIEnumerable | AsIQueryable,
+        AllCollections = AsList | AsArray | AsIEnumerable | AsIQueryable | AsDictionary,
 
         /// <summary>
         /// All of the flags for variations in which a given <see cref="TestData"/> type is a property on another type.

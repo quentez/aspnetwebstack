@@ -365,6 +365,9 @@ namespace Microsoft.TestCommon
         private static readonly Type OpenIEnumerableType = typeof(IEnumerable<>);
         private static readonly Type OpenListType = typeof(List<>);
         private static readonly Type OpenIQueryableType = typeof(IQueryable<>);
+        private static readonly Type OpenDictionaryType = typeof(Dictionary<,>);
+        private static readonly Type OpenTestDataHolderType = typeof(TestDataHolder<>);
+        private int dictionaryKey;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TestData&lt;T&gt;"/> class.
@@ -373,22 +376,22 @@ namespace Microsoft.TestCommon
             : base(typeof(T))
         {
             Type[] typeParams = new Type[] { this.Type };
+            Type[] dictionaryTypeParams = new Type[] { typeof(string), this.Type };
 
             Type arrayType = this.Type.MakeArrayType();
             Type listType = OpenListType.MakeGenericType(typeParams);
             Type iEnumerableType = OpenIEnumerableType.MakeGenericType(typeParams);
             Type iQueryableType = OpenIQueryableType.MakeGenericType(typeParams);
-
-            Type[] typeArrayParams = new Type[] { arrayType };
-            Type[] typeListParams = new Type[] { listType };
-            Type[] typeIEnumerableParams = new Type[] { iEnumerableType };
-            Type[] typeIQueryableParams = new Type[] { iQueryableType };
+            Type dictionaryType = OpenDictionaryType.MakeGenericType(dictionaryTypeParams);
+            Type testDataHolderType = OpenTestDataHolderType.MakeGenericType(typeParams);
 
             this.RegisterTestDataVariation(TestDataVariations.AsInstance, this.Type, () => GetTypedTestData());
             this.RegisterTestDataVariation(TestDataVariations.AsArray, arrayType, GetTestDataAsArray);
             this.RegisterTestDataVariation(TestDataVariations.AsIEnumerable, iEnumerableType, GetTestDataAsIEnumerable);
             this.RegisterTestDataVariation(TestDataVariations.AsIQueryable, iQueryableType, GetTestDataAsIQueryable);
             this.RegisterTestDataVariation(TestDataVariations.AsList, listType, GetTestDataAsList);
+            this.RegisterTestDataVariation(TestDataVariations.AsDictionary, dictionaryType, GetTestDataAsDictionary);
+            this.RegisterTestDataVariation(TestDataVariations.AsClassMember, testDataHolderType, GetTestDataInHolder);
         }
 
         public IEnumerator<T> GetEnumerator()
@@ -435,6 +438,20 @@ namespace Microsoft.TestCommon
         public IQueryable<T> GetTestDataAsIQueryable()
         {
             return this.GetTypedTestData().AsQueryable();
+        }
+
+        public Dictionary<string, T> GetTestDataAsDictionary()
+        {
+            // Some TestData collections contain duplicates e.g. UintTestData contains both 0 and UInt32.MinValue.
+            // Therefore use dictionaryKey, not _unused.ToString().  Reset key to keep dictionaries consistent if used
+            // multiple times.
+            dictionaryKey = 0;
+            return this.GetTypedTestData().ToDictionary(_unused => (dictionaryKey++).ToString());
+        }
+
+        public IEnumerable<TestDataHolder<T>> GetTestDataInHolder()
+        {
+            return this.GetTypedTestData().Select(value => new TestDataHolder<T> { V1 = value, });
         }
 
         /// <summary>

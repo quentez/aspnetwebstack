@@ -18,13 +18,18 @@ namespace Microsoft.TestCommon
 
         public ReplaceCultureAttribute()
         {
-            Culture = "en-GB";
-            UICulture = "en-US";
+            Culture = CultureReplacer.DefaultCultureName;
+            UICulture = CultureReplacer.DefaultUICultureName;
         }
 
         /// <summary>
         /// Sets <see cref="Thread.CurrentCulture"/> for the test. Defaults to en-GB.
         /// </summary>
+        /// <remarks>
+        /// en-GB is used here as the default because en-US is equivalent to the InvariantCulture. We
+        /// want to be able to find bugs where we're accidentally relying on the Invariant instead of the
+        /// user's culture.
+        /// </remarks>
         public string Culture { get; set; }
 
         /// <summary>

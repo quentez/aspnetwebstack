@@ -100,7 +100,7 @@ namespace System.Web.Mvc.Test
             ValueProviderDictionary dict;
 
             // Act
-            using (ReplaceCurrentCulture("fr-FR"))
+            using (new CultureReplacer("fr-FR"))
             {
                 dict = GetAndPopulateDictionary();
             }
@@ -122,7 +122,7 @@ namespace System.Web.Mvc.Test
             ValueProviderDictionary dict;
 
             // Act
-            using (ReplaceCurrentCulture("fr-FR"))
+            using (new CultureReplacer("fr-FR"))
             {
                 dict = GetAndPopulateDictionary();
             }
@@ -143,7 +143,7 @@ namespace System.Web.Mvc.Test
             ValueProviderDictionary dict;
 
             // Act
-            using (ReplaceCurrentCulture("fr-FR"))
+            using (new CultureReplacer("fr-FR"))
             {
                 dict = GetAndPopulateDictionary();
             }
@@ -151,8 +151,8 @@ namespace System.Web.Mvc.Test
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal("barFromRoute", result.AttemptedValue);
-            Assert.Equal("barFromRoute", result.RawValue);
+            Assert.Equal("barInRoute", result.AttemptedValue);
+            Assert.Equal("barInRoute", result.RawValue);
             Assert.Equal(CultureInfo.InvariantCulture, result.Culture);
         }
 
@@ -167,12 +167,12 @@ namespace System.Web.Mvc.Test
 
             RouteData rd = new RouteData();
             rd.Values["foo"] = "fooFromRoute";
-            rd.Values["bar"] = "barFromRoute";
+            rd.Values["bar"] = "barInRoute";
 
             NameValueCollection queryString = new NameValueCollection()
             {
                 { "foo", "fooFromQueryString" },
-                { "bar", "barFromQueryString" },
+                { "bar", "barInQueryString" },
                 { "baz", "bazFromQueryString" },
                 { null, "nullValue" },
                 { "", "emptyStringValue" }
@@ -183,24 +183,6 @@ namespace System.Web.Mvc.Test
             mockControllerContext.Setup(c => c.HttpContext.Request.QueryString).Returns(queryString);
             mockControllerContext.Setup(c => c.RouteData).Returns(rd);
             return mockControllerContext.Object;
-        }
-
-        public static IDisposable ReplaceCurrentCulture(string culture)
-        {
-            CultureInfo newCulture = CultureInfo.GetCultureInfo(culture);
-            CultureInfo originalCulture = Thread.CurrentThread.CurrentCulture;
-            Thread.CurrentThread.CurrentCulture = newCulture;
-            return new CultureReplacement { OriginalCulture = originalCulture };
-        }
-
-        private class CultureReplacement : IDisposable
-        {
-            public CultureInfo OriginalCulture;
-
-            public void Dispose()
-            {
-                Thread.CurrentThread.CurrentCulture = OriginalCulture;
-            }
         }
     }
 }

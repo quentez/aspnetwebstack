@@ -471,4 +471,44 @@
   <data name="Request_RequestContextMustNotBeNull" xml:space="preserve">
     <value>The request must have a request context.</value>
   </data>
+  <data name="TypeInstanceMustNotBeNull" xml:space="preserve">
+    <value>The {0} instance must not be null.</value>
+  </data>
+  <data name="TypePropertyMustNotBeNull" xml:space="preserve">
+    <value>{0}.{1} must not be null.</value>
+  </data>
+  <data name="TypeMethodMustNotReturnNull" xml:space="preserve">
+    <value>{0}.{1} must not return null.</value>
+  </data>
+  <data name="SubRouteCollection_DuplicateRouteName" xml:space="preserve">
+    <value>A route named '{0}' is already in the route collection. Route names must be unique.
+
+Duplicates:
+{1}
+{2}</value>
+  </data>
+  <data name="DirectRoute_MissingActionDescriptors" xml:space="preserve">
+    <value>The route does not have any associated action descriptors. Routing requires that each direct route map to a non-empty set of actions.</value>
+  </data>
+  <data name="RoutePrefix_CannotSupportMultiRoutePrefix" xml:space="preserve">
+    <value>Only one route prefix attribute is supported. Remove extra attributes from the controller of type '{0}'.</value>
+  </data>
+  <data name="RoutePrefix_PrefixCannotBeNull" xml:space="preserve">
+    <value>The property 'prefix' from route prefix attribute on controller of type '{0}' cannot be null.</value>
+  </data>
+  <data name="DirectRoute_AmbiguousController" xml:space="preserve">
+    <value>Multiple controller types were found that match the URL. This can happen if attribute routes on multiple controllers match the requested URL.{1}{1}The request has found the following matching controller types: {0}</value>
+  </data>
+  <data name="DirectRoute_HandlerNotSupported" xml:space="preserve">
+    <value>Direct routing does not support per-route message handlers.</value>
+  </data>
+  <data name="TraceHttpControllerTypeResolverError" xml:space="preserve">
+    <value>Exception thrown while getting types from '{0}'.</value>
+  </data>
+  <data name="DirectRoute_InvalidParameter_Action" xml:space="preserve">
+    <value>A direct route for an action method cannot use the parameter 'action'. Specify a literal path in place of this parameter to create a route to the action.</value>
+  </data>
+  <data name="DirectRoute_InvalidParameter_Controller" xml:space="preserve">
+    <value>A direct route cannot use the parameter 'controller'. Specify a literal path in place of this parameter to create a route to a controller.</value>
+  </data>
 </root>

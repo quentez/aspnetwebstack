@@ -1,13 +1,16 @@
 ﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.ExceptionServices;
 using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http.Controllers;
 using System.Web.Http.Dispatcher;
+using System.Web.Http.ExceptionHandling;
 using System.Web.Http.Properties;
 
 namespace System.Web.Http
@@ -20,8 +23,12 @@ namespace System.Web.Http
     {
         // _anonymousPrincipal needs thread-safe intialization so use a static field initializer
         private static readonly IPrincipal _anonymousPrincipal = new GenericPrincipal(new GenericIdentity(String.Empty), new string[0]);
+
         private readonly HttpConfiguration _configuration;
         private readonly HttpMessageHandler _dispatcher;
+
+        private IExceptionLogger _exceptionLogger;
+        private IExceptionHandler _exceptionHandler;
         private bool _disposed;
         private bool _initialized = false;
         private object _initializationLock = new object();
@@ -102,6 +109,42 @@ namespace System.Web.Http
             get { return _configuration; }
         }
 
+        /// <remarks>This property is settable only for unit testing purposes.</remarks>
+        internal IExceptionLogger ExceptionLogger
+        {
+            get
+            {
+                if (_exceptionLogger == null)
+                {
+                    _exceptionLogger = ExceptionServices.GetLogger(_configuration);
+                }
+
+                return _exceptionLogger;
+            }
+            set
+            {
+                _exceptionLogger = value;
+            }
+        }
+
+        /// <remarks>This property is settable only for unit testing purposes.</remarks>
+        internal IExceptionHandler ExceptionHandler
+        {
+            get
+            {
+                if (_exceptionHandler == null)
+                {
+                    _exceptionHandler = ExceptionServices.GetHandler(_configuration);
+                }
+
+                return _exceptionHandler;
+            }
+            set
+            {
+                _exceptionHandler = value;
+            }
+        }
+
         /// <summary>
         /// Releases unmanaged and - optionally - managed resources
         /// </summary>
@@ -124,7 +167,7 @@ namespace System.Web.Http
         /// Dispatches an incoming <see cref="HttpRequestMessage"/>.
         /// </summary>
         /// <param name="request">The request to dispatch</param>
-        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
         /// <returns>A <see cref="Task{HttpResponseMessage}"/> representing the ongoing operation.</returns>
         [SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification = "Caller becomes owner.")]
         [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "we are converting exceptions to error responses.")]
@@ -173,15 +216,35 @@ namespace System.Web.Http
 
             try
             {
-                return await base.SendAsync(request, cancellationToken);
-            }
-            catch (HttpResponseException exception)
-            {
-                return exception.Response;
-            }
-            catch (Exception exception)
-            {
-                return request.CreateErrorResponse(HttpStatusCode.InternalServerError, exception);
+                ExceptionDispatchInfo exceptionInfo;
+
+                try
+                {
+                    return await base.SendAsync(request, cancellationToken);
+                }
+                catch (HttpResponseException exception)
+                {
+                    return exception.Response;
+                }
+                catch (Exception exception)
+                {
+                    exceptionInfo = ExceptionDispatchInfo.Capture(exception);
+                }
+
+                Debug.Assert(exceptionInfo.SourceException != null);
+
+                ExceptionContext exceptionContext = new ExceptionContext(exceptionInfo.SourceException,
+                    ExceptionCatchBlocks.HttpServer, request);
+                await ExceptionLogger.LogAsync(exceptionContext, cancellationToken);
+                HttpResponseMessage response = await ExceptionHandler.HandleAsync(exceptionContext,
+                    cancellationToken);
+
+                if (response == null)
+                {
+                    exceptionInfo.Throw();
+                }
+
+                return response;
             }
             finally
             {
@@ -213,6 +276,16 @@ namespace System.Web.Http
 
             // Create pipeline
             InnerHandler = HttpClientFactory.CreatePipeline(_dispatcher, _configuration.MessageHandlers);
+        }
+
+        private static HttpConfiguration EnsureNonNull(HttpConfiguration configuration)
+        {
+            if (configuration == null)
+            {
+                throw new ArgumentNullException("configuration");
+            }
+
+            return configuration;
         }
     }
 }
